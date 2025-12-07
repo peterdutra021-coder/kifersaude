@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Search, Send, MessageCircle, Phone, Video, MoreVertical, ArrowLeft } from 'lucide-react';
+import { Search, MessageCircle, Phone, Video, MoreVertical, ArrowLeft } from 'lucide-react';
+import { MessageInput } from './MessageInput';
+import { MessageBubble } from './MessageBubble';
 
 type WhatsAppChat = {
   id: string;
@@ -23,6 +25,7 @@ type WhatsAppMessage = {
   has_media: boolean;
   timestamp: string | null;
   direction: 'inbound' | 'outbound' | null;
+  ack_status: number | null;
   created_at: string;
 };
 
@@ -30,11 +33,14 @@ export default function WhatsAppTab() {
   const [chats, setChats] = useState<WhatsAppChat[]>([]);
   const [selectedChat, setSelectedChat] = useState<WhatsAppChat | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
-  const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [sendingMessage, setSendingMessage] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [replyToMessage, setReplyToMessage] = useState<{
+    id: string;
+    body: string;
+    from: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -74,6 +80,17 @@ export default function WhatsAppTab() {
           (payload) => {
             setMessages((prev) => [...prev, payload.new as WhatsAppMessage]);
             scrollToBottom();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages', filter: `chat_id=eq.${selectedChat.id}` },
+          (payload) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === payload.new.id ? (payload.new as WhatsAppMessage) : msg
+              )
+            );
           }
         )
         .subscribe();
@@ -142,19 +159,17 @@ export default function WhatsAppTab() {
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!messageInput.trim() || !selectedChat || sendingMessage) return;
+  const handleReply = (messageId: string, body: string, from: string) => {
+    setReplyToMessage({ id: messageId, body, from });
+  };
 
-    setSendingMessage(true);
-    try {
-      console.log('Enviando mensagem para:', selectedChat.id, messageInput);
-      setMessageInput('');
-    } catch (error) {
-      console.error('Error sending message:', error);
-    } finally {
-      setSendingMessage(false);
-    }
+  const handleCancelReply = () => {
+    setReplyToMessage(null);
+  };
+
+  const handleMessageSent = () => {
+    loadMessages(selectedChat!.id);
+    scrollToBottom();
   };
 
   const filteredChats = chats.filter(
@@ -289,58 +304,36 @@ export default function WhatsAppTab() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <div className="flex-1 overflow-y-auto p-4">
                 {messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-slate-500">
                     <p>Nenhuma mensagem ainda</p>
                   </div>
                 ) : (
                   messages.map((message) => (
-                    <div
+                    <MessageBubble
                       key={message.id}
-                      className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                          message.direction === 'outbound'
-                            ? 'bg-teal-500 text-white'
-                            : 'bg-white text-slate-900'
-                        }`}
-                      >
-                        <p className="text-sm whitespace-pre-wrap break-words">{message.body}</p>
-                        <p
-                          className={`text-xs mt-1 ${
-                            message.direction === 'outbound' ? 'text-teal-100' : 'text-slate-500'
-                          }`}
-                        >
-                          {formatTime(message.timestamp)}
-                        </p>
-                      </div>
-                    </div>
+                      id={message.id}
+                      body={message.body}
+                      type={message.type}
+                      direction={message.direction || 'inbound'}
+                      timestamp={message.timestamp}
+                      ackStatus={message.ack_status}
+                      hasMedia={message.has_media}
+                      fromName={selectedChat?.name || undefined}
+                      onReply={handleReply}
+                    />
                   ))
                 )}
                 <div ref={messagesEndRef} />
               </div>
 
-              <form onSubmit={handleSendMessage} className="bg-white border-t border-slate-200 p-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    placeholder="Digite uma mensagem..."
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    disabled={sendingMessage}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!messageInput.trim() || sendingMessage}
-                    className="p-3 bg-teal-600 text-white rounded-full hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </div>
-              </form>
+              <MessageInput
+                chatId={selectedChat.id}
+                onMessageSent={handleMessageSent}
+                replyToMessage={replyToMessage}
+                onCancelReply={handleCancelReply}
+              />
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
