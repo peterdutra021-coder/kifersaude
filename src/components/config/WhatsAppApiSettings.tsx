@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Eye,
   EyeOff,
@@ -37,17 +37,11 @@ export default function WhatsAppApiSettings() {
   const [apiKey, setApiKey] = useState('');
   const [statusOnSend, setStatusOnSend] = useState('');
 
-  useEffect(() => {
-    void loadSettings();
-  }, []);
-
-  useEffect(() => {
-    if (leadStatuses.length > 0 && !statusOnSend) {
-      setStatusOnSend(leadStatuses[0]?.id || '');
+  const loadSettings = useCallback(async () => {
+    if (leadStatuses.length === 0) {
+      return;
     }
-  }, [leadStatuses, statusOnSend]);
 
-  const loadSettings = async () => {
     setLoading(true);
     setStatusMessage(null);
 
@@ -61,14 +55,26 @@ export default function WhatsAppApiSettings() {
     setBaseUrl(normalized.baseUrl);
     setSessionId(normalized.sessionId);
     setApiKey(normalized.apiKey);
-    setStatusOnSend(normalized.statusOnSend || leadStatuses[0]?.id || '');
+
+    const validStatusIds = leadStatuses.map(s => s.id);
+    const isValidStatus = normalized.statusOnSend && validStatusIds.includes(normalized.statusOnSend);
+    setStatusOnSend(isValidStatus ? normalized.statusOnSend : leadStatuses[0]?.id || '');
 
     setLoading(false);
-  };
+  }, [leadStatuses]);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
 
   const handleSave = async () => {
     if (!autoContactIntegration) {
       setStatusMessage({ type: 'error', text: 'Integração de automação não configurada.' });
+      return;
+    }
+
+    if (!statusOnSend) {
+      setStatusMessage({ type: 'error', text: 'Selecione um status válido.' });
       return;
     }
 
@@ -82,7 +88,7 @@ export default function WhatsAppApiSettings() {
       baseUrl: baseUrl.trim(),
       sessionId: sessionId.trim(),
       apiKey: apiKey.trim(),
-      statusOnSend: statusOnSend.trim(),
+      statusOnSend: statusOnSend,
       messageFlow: currentMessageFlow,
     };
 
@@ -102,14 +108,18 @@ export default function WhatsAppApiSettings() {
       setBaseUrl(normalized.baseUrl);
       setSessionId(normalized.sessionId);
       setApiKey(normalized.apiKey);
-      setStatusOnSend(normalized.statusOnSend);
+
+      const validStatusIds = leadStatuses.map(s => s.id);
+      const isValidStatus = normalized.statusOnSend && validStatusIds.includes(normalized.statusOnSend);
+      setStatusOnSend(isValidStatus ? normalized.statusOnSend : leadStatuses[0]?.id || '');
+
       setStatusMessage({ type: 'success', text: 'Configuração salva com sucesso.' });
     }
 
     setSaving(false);
   };
 
-  if (loading) {
+  if (loading || leadStatuses.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-3 text-slate-600">
         <Loader2 className="w-5 h-5 animate-spin" />
