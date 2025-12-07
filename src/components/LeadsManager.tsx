@@ -1319,7 +1319,7 @@ export default function LeadsManager({
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-6 p-4 space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative w-full lg:max-w-xl">
+          <div className="relative w-full lg:max-w-2xl">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
               type="text"
@@ -1329,17 +1329,156 @@ export default function LeadsManager({
               className="w-full h-11 pl-10 pr-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end w-full lg:w-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
-              <label className="text-sm font-medium text-slate-700" htmlFor="lead-sort-field">
-                Ordenar por
-              </label>
-              <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+            >
+              <Filter className="w-4 h-4" />
+              Limpar filtros
+            </button>
+            <div className="px-4 py-2 bg-slate-50 rounded-lg text-sm text-slate-600 flex items-center justify-center gap-2 border border-slate-200">
+              <span className="font-semibold text-teal-700">{filteredLeads.length}</span>
+              <span>lead(s) encontrado(s)</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Filtros Principais</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {[
+                {
+                  key: 'status',
+                  icon: Filter,
+                  options: statusFilterOptions,
+                  placeholder: 'Todos os status',
+                  values: filterStatus,
+                  onChange: setFilterStatus,
+                },
+                {
+                  key: 'responsavel',
+                  icon: UserCircle,
+                  options: responsavelFilterOptions,
+                  placeholder: 'Todos os responsáveis',
+                  values: filterResponsavel,
+                  onChange: setFilterResponsavel,
+                },
+                {
+                  key: 'origem',
+                  icon: MapPin,
+                  options: origemFilterOptions,
+                  placeholder: 'Todas as origens',
+                  values: filterOrigem,
+                  onChange: setFilterOrigem,
+                },
+                {
+                  key: 'tipo-contratacao',
+                  icon: Layers,
+                  options: tipoContratacaoFilterOptions,
+                  placeholder: 'Todos os tipos',
+                  values: filterTipoContratacao,
+                  onChange: setFilterTipoContratacao,
+                },
+              ].map((filter) => (
+                <FilterMultiSelect key={filter.key} {...filter} />
+              ))}
+            </div>
+          </div>
+
+          <details className="group">
+            <summary className="cursor-pointer list-none">
+              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200">
+                <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                  <Filter className="w-4 h-4" />
+                  Filtros Avançados
+                </h4>
+                <span className="text-xs text-slate-500 group-open:rotate-180 transition-transform">▼</span>
+              </div>
+            </summary>
+            <div className="mt-3 space-y-4 p-4 bg-slate-50/50 rounded-lg border border-slate-100">
+              <div>
+                <h5 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Tags e Canais</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    {
+                      key: 'tags',
+                      icon: Tag,
+                      options: tagFilterOptions,
+                      placeholder: 'Todas as tags',
+                      values: filterTags,
+                      onChange: setFilterTags,
+                    },
+                    {
+                      key: 'canais',
+                      icon: Share2,
+                      options: canalFilterOptions,
+                      placeholder: 'Todos os canais',
+                      values: filterCanais,
+                      onChange: setFilterCanais,
+                    },
+                  ].map((filter) => (
+                    <FilterMultiSelect key={filter.key} {...filter} />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h5 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Filtros de Data</h5>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                  {[
+                    {
+                      key: 'criacao',
+                      icon: Calendar,
+                      label: 'Criação',
+                      fromValue: filterCreatedFrom,
+                      toValue: filterCreatedTo,
+                      onFromChange: setFilterCreatedFrom,
+                      onToChange: setFilterCreatedTo,
+                      type: 'date' as const,
+                    },
+                    {
+                      key: 'ultimo-contato',
+                      icon: MessageCircle,
+                      label: 'Último contato',
+                      fromValue: filterUltimoContatoFrom,
+                      toValue: filterUltimoContatoTo,
+                      onFromChange: setFilterUltimoContatoFrom,
+                      onToChange: setFilterUltimoContatoTo,
+                      type: 'datetime-local' as const,
+                    },
+                    {
+                      key: 'proximo-retorno',
+                      icon: Bell,
+                      label: 'Próximo retorno',
+                      fromValue: filterProximoRetornoFrom,
+                      toValue: filterProximoRetornoTo,
+                      onFromChange: setFilterProximoRetornoFrom,
+                      onToChange: setFilterProximoRetornoTo,
+                      type: 'datetime-local' as const,
+                    },
+                  ].map((dateFilter) => (
+                    <FilterDateRange key={dateFilter.key} {...dateFilter} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <div>
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Ordenação</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-600" htmlFor="lead-sort-field">
+                  Ordenar por
+                </label>
                 <select
                   id="lead-sort-field"
                   value={sortField}
                   onChange={(event) => setSortField(event.target.value as SortField)}
-                  className="w-48 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 >
                   {SORT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1347,122 +1486,23 @@ export default function LeadsManager({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-600" htmlFor="lead-sort-direction">
+                  Direção
+                </label>
                 <select
-                  aria-label="Direção da ordenação"
+                  id="lead-sort-direction"
                   value={sortDirection}
                   onChange={(event) => setSortDirection(event.target.value as typeof sortDirection)}
-                  className="w-40 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 >
                   <option value="asc">Crescente</option>
                   <option value="desc">Decrescente</option>
                 </select>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-50"
-            >
-              <Filter className="w-4 h-4" />
-              Limpar filtros
-            </button>
-            <div className="text-sm text-slate-600 flex items-center justify-end">
-              <span className="font-medium">{filteredLeads.length}</span>
-              <span className="ml-1">lead(s) encontrado(s)</span>
-            </div>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
-          {[
-            {
-              key: 'status',
-              icon: Filter,
-              options: statusFilterOptions,
-              placeholder: 'Todos os status',
-              values: filterStatus,
-              onChange: setFilterStatus,
-            },
-            {
-              key: 'responsavel',
-              icon: UserCircle,
-              options: responsavelFilterOptions,
-              placeholder: 'Todos os responsáveis',
-              values: filterResponsavel,
-              onChange: setFilterResponsavel,
-            },
-            {
-              key: 'origem',
-              icon: MapPin,
-              options: origemFilterOptions,
-              placeholder: 'Todas as origens',
-              values: filterOrigem,
-              onChange: setFilterOrigem,
-            },
-            {
-              key: 'tipo-contratacao',
-              icon: Layers,
-              options: tipoContratacaoFilterOptions,
-              placeholder: 'Todos os tipos',
-              values: filterTipoContratacao,
-              onChange: setFilterTipoContratacao,
-            },
-            {
-              key: 'tags',
-              icon: Tag,
-              options: tagFilterOptions,
-              placeholder: 'Todas as tags',
-              values: filterTags,
-              onChange: setFilterTags,
-            },
-            {
-              key: 'canais',
-              icon: Share2,
-              options: canalFilterOptions,
-              placeholder: 'Todos os canais',
-              values: filterCanais,
-              onChange: setFilterCanais,
-            },
-          ].map((filter) => (
-            <FilterMultiSelect key={filter.key} {...filter} />
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[
-            {
-              key: 'criacao',
-              icon: Calendar,
-              label: 'Criação',
-              fromValue: filterCreatedFrom,
-              toValue: filterCreatedTo,
-              onFromChange: setFilterCreatedFrom,
-              onToChange: setFilterCreatedTo,
-              type: 'date' as const,
-            },
-            {
-              key: 'ultimo-contato',
-              icon: MessageCircle,
-              label: 'Último contato',
-              fromValue: filterUltimoContatoFrom,
-              toValue: filterUltimoContatoTo,
-              onFromChange: setFilterUltimoContatoFrom,
-              onToChange: setFilterUltimoContatoTo,
-              type: 'datetime-local' as const,
-            },
-            {
-              key: 'proximo-retorno',
-              icon: Bell,
-              label: 'Próximo retorno',
-              fromValue: filterProximoRetornoFrom,
-              toValue: filterProximoRetornoTo,
-              onFromChange: setFilterProximoRetornoFrom,
-              onToChange: setFilterProximoRetornoTo,
-              type: 'datetime-local' as const,
-            },
-          ].map((dateFilter) => (
-            <FilterDateRange key={dateFilter.key} {...dateFilter} />
-          ))}
         </div>
       </div>
 

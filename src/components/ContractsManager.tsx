@@ -420,79 +420,105 @@ export default function ContractsManager({
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-6 p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-          <div className="relative">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-6 p-4 space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-2xl">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar por código, operadora ou plano..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              className="w-full h-11 pl-10 pr-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none"
-            >
-              <option value="todos">Todos os status</option>
-              <option value="Rascunho">Rascunho</option>
-              <option value="Em análise">Em análise</option>
-              <option value="Documentos pendentes">Documentos pendentes</option>
-              <option value="Proposta enviada">Proposta enviada</option>
-              <option value="Aguardando assinatura">Aguardando assinatura</option>
-              <option value="Emitido">Emitido</option>
-              <option value="Ativo">Ativo</option>
-              <option value="Suspenso">Suspenso</option>
-              <option value="Cancelado">Cancelado</option>
-              <option value="Encerrado">Encerrado</option>
-            </select>
+          <div className="px-4 py-2 bg-slate-50 rounded-lg text-sm text-slate-600 flex items-center justify-center gap-2 border border-slate-200">
+            <span className="font-semibold text-teal-700">{filteredContracts.length}</span>
+            <span>contrato(s) encontrado(s)</span>
           </div>
-          <div className="relative">
-            <select
-              value={filterResponsavel}
-              onChange={(e) => setFilterResponsavel(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none"
-            >
-              <option value="todos">Todos os responsáveis</option>
-              {responsavelFilterOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="relative">
-            <select
-              value={dateProximityFilter}
-              onChange={(e) => setDateProximityFilter(e.target.value as 'todos' | 'proximos-30')}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none"
-            >
-              <option value="todos">Todas as datas</option>
-              <option value="proximos-30">Próximos 30 dias</option>
-            </select>
-          </div>
-          <div className="relative">
-            <select
-              value={filterOperadora}
-              onChange={(e) => setFilterOperadora(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none"
-            >
-              <option value="todas">Todas as operadoras</option>
-              {operadoraOptions.map((operadora) => (
-                <option key={operadora} value={operadora}>
-                  {operadora}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="text-sm text-slate-600 flex items-center justify-between sm:justify-end text-center sm:text-right">
-            <span className="font-medium w-full sm:w-auto">{filteredContracts.length}</span>
-            <span className="ml-0 sm:ml-1 w-full sm:w-auto">contrato(s) encontrado(s)</span>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Filtros</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  Status
+                </label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                >
+                  <option value="todos">Todos os status</option>
+                  <option value="Rascunho">Rascunho</option>
+                  <option value="Em análise">Em análise</option>
+                  <option value="Documentos pendentes">Documentos pendentes</option>
+                  <option value="Proposta enviada">Proposta enviada</option>
+                  <option value="Aguardando assinatura">Aguardando assinatura</option>
+                  <option value="Emitido">Emitido</option>
+                  <option value="Ativo">Ativo</option>
+                  <option value="Suspenso">Suspenso</option>
+                  <option value="Cancelado">Cancelado</option>
+                  <option value="Encerrado">Encerrado</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                  Responsável
+                </label>
+                <select
+                  value={filterResponsavel}
+                  onChange={(e) => setFilterResponsavel(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                >
+                  <option value="todos">Todos os responsáveis</option>
+                  {responsavelFilterOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                  Operadora
+                </label>
+                <select
+                  value={filterOperadora}
+                  onChange={(e) => setFilterOperadora(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                >
+                  <option value="todas">Todas as operadoras</option>
+                  {operadoraOptions.map((operadora) => (
+                    <option key={operadora} value={operadora}>
+                      {operadora}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  Datas importantes
+                </label>
+                <select
+                  value={dateProximityFilter}
+                  onChange={(e) => setDateProximityFilter(e.target.value as 'todos' | 'proximos-30')}
+                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                >
+                  <option value="todos">Todas as datas</option>
+                  <option value="proximos-30">Próximos 30 dias</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </div>
