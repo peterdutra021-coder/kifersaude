@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronUp, Info, Loader2, MessageCircle, Plus, Save, ShieldCheck, Trash2, X, Eye, EyeOff, Link, Key, Settings } from 'lucide-react';
+import { ChevronDown, ChevronUp, Info, Loader2, MessageCircle, Plus, Save, ShieldCheck, Trash2, X } from 'lucide-react';
 
 import { configService } from '../../lib/configService';
 import {
@@ -10,14 +10,12 @@ import {
   type AutoContactStep,
 } from '../../lib/autoContactService';
 import type { IntegrationSetting } from '../../lib/supabase';
-import { useConfig } from '../../contexts/ConfigContext';
 
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
 type FlowStepUpdate = Partial<Pick<AutoContactStep, 'message' | 'delaySeconds' | 'active'>>;
 
 export default function AutoContactFlowSettings() {
-  const { leadStatuses } = useConfig();
   const [autoContactIntegration, setAutoContactIntegration] = useState<IntegrationSetting | null>(null);
   const [autoContactSettings, setAutoContactSettings] = useState<AutoContactSettings | null>(null);
   const [messageFlowDraft, setMessageFlowDraft] = useState<AutoContactStep[]>(DEFAULT_MESSAGE_FLOW);
@@ -25,13 +23,6 @@ export default function AutoContactFlowSettings() {
   const [savingFlow, setSavingFlow] = useState(false);
   const [statusMessage, setStatusMessage] = useState<MessageState>(null);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
-  const [showApiKey, setShowApiKey] = useState(false);
-
-  const [enabled, setEnabled] = useState(true);
-  const [baseUrl, setBaseUrl] = useState('');
-  const [sessionId, setSessionId] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [statusOnSend, setStatusOnSend] = useState('Contato Inicial');
 
   useEffect(() => {
     void loadAutoContactSettings();
@@ -48,12 +39,6 @@ export default function AutoContactFlowSettings() {
     setAutoContactSettings(normalized);
     const flow = normalized.messageFlow.length ? normalized.messageFlow : DEFAULT_MESSAGE_FLOW;
     setMessageFlowDraft(flow);
-
-    setEnabled(normalized.enabled);
-    setBaseUrl(normalized.baseUrl);
-    setSessionId(normalized.sessionId);
-    setApiKey(normalized.apiKey);
-    setStatusOnSend(normalized.statusOnSend);
 
     setExpandedSteps(new Set(flow.map(step => step.id)));
 
@@ -127,12 +112,9 @@ export default function AutoContactFlowSettings() {
       active: step.active !== false,
     }));
 
+    const currentSettings = autoContactSettings || normalizeAutoContactSettings(null);
     const newSettings = {
-      enabled,
-      baseUrl: baseUrl.trim(),
-      sessionId: sessionId.trim(),
-      apiKey: apiKey.trim(),
-      statusOnSend: statusOnSend.trim() || 'Contato Inicial',
+      ...currentSettings,
       messageFlow: sanitizedFlow,
     };
 
@@ -149,12 +131,7 @@ export default function AutoContactFlowSettings() {
       setAutoContactIntegration(updatedIntegration);
       setAutoContactSettings(normalized);
       setMessageFlowDraft(normalized.messageFlow.length ? normalized.messageFlow : DEFAULT_MESSAGE_FLOW);
-      setEnabled(normalized.enabled);
-      setBaseUrl(normalized.baseUrl);
-      setSessionId(normalized.sessionId);
-      setApiKey(normalized.apiKey);
-      setStatusOnSend(normalized.statusOnSend);
-      setStatusMessage({ type: 'success', text: 'Configuração salva com sucesso.' });
+      setStatusMessage({ type: 'success', text: 'Fluxo de mensagens salvo com sucesso.' });
     }
 
     setSavingFlow(false);
@@ -183,112 +160,10 @@ export default function AutoContactFlowSettings() {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <div className="flex items-center space-x-3 mb-6">
-        <div className="p-2 rounded-full bg-teal-100 text-teal-700">
-          <MessageCircle className="w-5 h-5" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900">WhatsApp - Automação de Contato</h3>
-          <p className="text-sm text-slate-500">
-            Configure a API e mensagens automáticas com variáveis personalizadas
-          </p>
-        </div>
-      </div>
-
       <div className="space-y-6">
-        <div className="bg-slate-50 rounded-lg p-5 space-y-4 border border-slate-200">
-          <div className="flex items-center gap-2 text-slate-900 font-medium">
-            <Settings className="w-4 h-4" />
-            Configurações da API
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
-                <Link className="w-4 h-4 text-slate-400" />
-                URL da API
-              </label>
-              <input
-                type="text"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-                placeholder="https://api.exemplo.com"
-              />
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
-                <Key className="w-4 h-4 text-slate-400" />
-                Session ID
-              </label>
-              <input
-                type="text"
-                value={sessionId}
-                onChange={(e) => setSessionId(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-                placeholder="seu-session-id"
-              />
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
-                <Key className="w-4 h-4 text-slate-400" />
-                API Key
-              </label>
-              <div className="relative">
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-                  placeholder="sua-api-key"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Status ao enviar primeira mensagem
-              </label>
-              <select
-                value={statusOnSend}
-                onChange={(e) => setStatusOnSend(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white"
-              >
-                {leadStatuses.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 pt-2">
-            <input
-              type="checkbox"
-              id="whatsapp-enabled"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-              className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-            />
-            <label htmlFor="whatsapp-enabled" className="text-sm text-slate-700">
-              Ativar automação de contato
-            </label>
-          </div>
-        </div>
-
-        <div className="border-t border-slate-200 pt-6">
+        <div>
           <div className="flex items-center gap-2 text-slate-900 font-medium mb-4">
-            <MessageCircle className="w-4 h-4" />
+            <MessageCircle className="w-5 h-5" />
             Fluxo de Mensagens
           </div>
           {statusMessage && (
@@ -455,7 +330,7 @@ export default function AutoContactFlowSettings() {
                 disabled={savingFlow}
               >
                 {savingFlow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {savingFlow ? 'Salvando...' : 'Salvar configuração'}
+                {savingFlow ? 'Salvando...' : 'Salvar fluxo de mensagens'}
               </button>
             </div>
           </div>

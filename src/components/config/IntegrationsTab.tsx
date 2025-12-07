@@ -14,6 +14,7 @@ import { configService } from '../../lib/configService';
 import { useConfig } from '../../contexts/ConfigContext';
 import type { IntegrationSetting } from '../../lib/supabase';
 import AutoContactFlowSettings from './AutoContactFlowSettings';
+import WhatsAppApiSettings from './WhatsAppApiSettings';
 
 const GPT_INTEGRATION_SLUG = 'gpt_transcription';
 
@@ -237,10 +238,13 @@ export default function IntegrationsTab() {
         <div className="mb-4">
           <h2 className="text-xl font-semibold text-slate-900">Automação do WhatsApp</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Configure o fluxo automático de contato com leads via WhatsApp
+            Configure as credenciais da API e o fluxo automático de mensagens
           </p>
         </div>
-        <AutoContactFlowSettings />
+        <div className="space-y-6">
+          <WhatsAppApiSettings />
+          <AutoContactFlowSettings />
+        </div>
       </div>
     </div>
   );
