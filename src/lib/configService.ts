@@ -1050,46 +1050,6 @@ export const configService = {
     }
   },
 
-  async createIntegrationSetting(
-    payload: Pick<IntegrationSetting, 'slug' | 'name'> & Partial<Pick<IntegrationSetting, 'description' | 'settings'>>,
-  ): Promise<{ data: IntegrationSetting | null; error: any }> {
-    try {
-      const insertPayload = {
-        ...payload,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as Record<string, any>;
-
-      const { data, error } = await supabase
-        .from('integration_settings')
-        .insert([insertPayload])
-        .select()
-        .single();
-
-      if (error) {
-        return { data: null, error: toPostgrestError(error) };
-      }
-
-      return { data: data ? normalizeIntegrationSetting(data as IntegrationSetting) : null, error: null };
-    } catch (error) {
-      if (isTableMissingError(error, 'integration_settings')) {
-        return {
-          data: null,
-          error: {
-            message: 'Tabela integration_settings não encontrada.',
-            details: 'Execute as migrações mais recentes para habilitar integrações.',
-            hint: '',
-            code: 'PGRST404',
-            name: 'PostgrestError',
-          },
-        };
-      }
-
-      console.error('Error creating integration setting:', error);
-      return { data: null, error: toPostgrestError(error) };
-    }
-  },
-
   async updateIntegrationSetting(
     id: string,
     updates: Partial<Pick<IntegrationSetting, 'name' | 'description' | 'settings'>>,
