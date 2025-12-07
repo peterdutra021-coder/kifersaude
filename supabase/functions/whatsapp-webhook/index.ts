@@ -24,6 +24,7 @@ type NormalizedMessage = {
   timestamp: string | null;
   contactName: string | null;
   isGroup: boolean;
+  ackStatus: number | null;
   payload: Record<string, unknown>;
 };
 
@@ -278,6 +279,8 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
   const chatIdLower = chatId.toLowerCase();
   const isGroup = chatIdLower.endsWith('@g.us') || Boolean((payload as any).isGroup);
 
+  const ackStatus = typeof payload.ack === 'number' ? payload.ack : null;
+
   const normalized = {
     chatId,
     messageId,
@@ -290,6 +293,7 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
     timestamp,
     contactName,
     isGroup,
+    ackStatus,
     payload: normalizePayload(payload),
   };
 
@@ -394,6 +398,7 @@ async function upsertMessage(message: NormalizedMessage) {
       timestamp: message.timestamp,
       payload: message.payload,
       direction: message.direction,
+      ack_status: message.ackStatus,
     },
     { onConflict: 'id' },
   );
@@ -401,6 +406,34 @@ async function upsertMessage(message: NormalizedMessage) {
   if (error) {
     throw new Error(`Erro ao salvar mensagem: ${error.message}`);
   }
+}
+
+async function updateMessageAck(messageId: string, ackStatus: number) {
+  console.log('whatsapp-webhook: atualizando ack da mensagem', {
+    messageId,
+    ackStatus,
+    ackLabel: getAckLabel(ackStatus),
+  });
+
+  const { error } = await supabase
+    .from('whatsapp_messages')
+    .update({ ack_status: ackStatus })
+    .eq('id', messageId);
+
+  if (error) {
+    throw new Error(`Erro ao atualizar ACK da mensagem: ${error.message}`);
+  }
+}
+
+function getAckLabel(ack: number): string {
+  const labels: Record<number, string> = {
+    0: 'enviando',
+    1: 'enviado',
+    2: 'recebido',
+    3: 'lido',
+    4: 'ouvido',
+  };
+  return labels[ack] || 'desconhecido';
 }
 
 Deno.serve(async (req) => {
@@ -451,7 +484,8 @@ Deno.serve(async (req) => {
     return respond({ error: message }, { status: 500 });
   }
 
-  const shouldHandleMessage = ['message', 'message_create', 'message_ack'].includes(eventName.toLowerCase());
+  const shouldHandleMessage = ['message', 'message_create'].includes(eventName.toLowerCase());
+  const isAckUpdate = eventName.toLowerCase() === 'message_ack';
 
   if (shouldHandleMessage) {
     const unwrapped = unwrapPayload(payload);
@@ -468,6 +502,28 @@ Deno.serve(async (req) => {
         console.error('whatsapp-webhook: erro ao salvar mensagem', message, { eventName, payload });
         return respond({ error: message }, { status: 500 });
       }
+    }
+  }
+
+  if (isAckUpdate) {
+    const unwrapped = unwrapPayload(payload);
+    const messageId = (unwrapped?.id as any)?._serialized || (unwrapped?.id as any)?.id;
+    const ackStatus = typeof unwrapped.ack === 'number' ? unwrapped.ack : null;
+
+    if (messageId && ackStatus !== null) {
+      try {
+        await updateMessageAck(messageId, ackStatus);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Erro desconhecido';
+        console.error('whatsapp-webhook: erro ao atualizar ACK', message, { messageId, ackStatus });
+        return respond({ error: message }, { status: 500 });
+      }
+    } else {
+      console.warn('whatsapp-webhook: ack update ignorado por falta de dados', {
+        messageId,
+        ackStatus,
+        payload: unwrapped,
+      });
     }
   }
 
