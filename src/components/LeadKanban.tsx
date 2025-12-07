@@ -47,19 +47,19 @@ export default function LeadKanban({ onLeadClick, onConvertToContract }: LeadKan
   }, [responsavelOptions]);
 
   const getResponsavelLabel = (lead: Lead): string => {
-    const responsavelId = (lead as any).responsavel_id as string | null | undefined;
-    if (!responsavelId) return 'Não definido';
-    return responsavelLabelById[responsavelId] || 'Não definido';
+    return lead.responsavel || 'Não definido';
   };
 
   const isOriginVisibleToObserver = useCallback(
-    (originId: string | null | undefined) => {
-      if (!originId) {
+    (origem: string | null | undefined) => {
+      if (!origem) {
         return true;
       }
-      return !restrictedOriginIdsForObservers.includes(originId);
+      const originObj = leadOrigins.find(o => o.nome === origem);
+      if (!originObj) return true;
+      return !restrictedOriginIdsForObservers.includes(originObj.id);
     },
-    [restrictedOriginIdsForObservers],
+    [restrictedOriginIdsForObservers, leadOrigins],
   );
 
   const loadLeads = useCallback(async () => {
@@ -76,8 +76,8 @@ export default function LeadKanban({ onLeadClick, onConvertToContract }: LeadKan
         .select('*')
         .eq('arquivado', false)
         .in(
-          'status_id',
-          statusColumns.map((column) => column.id),
+          'status',
+          statusColumns.map((column) => column.nome),
         )
         .order('created_at', { ascending: false });
 
@@ -87,7 +87,7 @@ export default function LeadKanban({ onLeadClick, onConvertToContract }: LeadKan
 
       if (isObserver) {
         fetchedLeads = fetchedLeads.filter((lead) =>
-          isOriginVisibleToObserver((lead as any).origem_id as string | null | undefined),
+          isOriginVisibleToObserver(lead.origem),
         );
       }
 
@@ -97,7 +97,7 @@ export default function LeadKanban({ onLeadClick, onConvertToContract }: LeadKan
     } finally {
       setLoading(false);
     }
-  }, [isObserver, isOriginVisibleToObserver, statusColumns]);
+  }, [isObserver, isOriginVisibleToObserver, statusColumns, leadOrigins]);
 
   useEffect(() => {
     loadLeads();
@@ -137,24 +137,22 @@ export default function LeadKanban({ onLeadClick, onConvertToContract }: LeadKan
       return;
     }
 
-    const oldStatusId = (draggedLead as any).status_id as string | null | undefined;
+    const oldStatusName = draggedLead.status;
+    const newStatusObj = statusColumns.find((s) => s.id === newStatusId);
+    const newStatusName = newStatusObj?.nome ?? 'Desconhecido';
 
-    if (oldStatusId === newStatusId) {
+    if (oldStatusName === newStatusName) {
       setDraggedLead(null);
       return;
     }
 
     const nowIso = new Date().toISOString();
-    const oldStatusName =
-      statusColumns.find((s) => s.id === oldStatusId)?.nome ?? 'Desconhecido';
-    const newStatusName =
-      statusColumns.find((s) => s.id === newStatusId)?.nome ?? 'Desconhecido';
     const responsavelLabel = getResponsavelLabel(draggedLead);
 
     setLeads((current) =>
       current.map((lead) =>
         lead.id === draggedLead.id
-          ? ({ ...lead, status_id: newStatusId, ultimo_contato: nowIso } as any)
+          ? { ...lead, status: newStatusName, ultimo_contato: nowIso }
           : lead,
       ),
     );
@@ -163,7 +161,7 @@ export default function LeadKanban({ onLeadClick, onConvertToContract }: LeadKan
       const { error: updateError } = await supabase
         .from('leads')
         .update({
-          status_id: newStatusId,
+          status: newStatusName,
           ultimo_contato: nowIso,
         })
         .eq('id', draggedLead.id);
@@ -193,7 +191,7 @@ export default function LeadKanban({ onLeadClick, onConvertToContract }: LeadKan
       setLeads((current) =>
         current.map((lead) =>
           lead.id === draggedLead.id
-            ? ({ ...lead, status_id: oldStatusId } as any)
+            ? { ...lead, status: oldStatusName }
             : lead,
         ),
       );
@@ -203,8 +201,10 @@ export default function LeadKanban({ onLeadClick, onConvertToContract }: LeadKan
   };
 
   const getLeadsByStatus = (statusId: string) => {
+    const statusObj = statusColumns.find((s) => s.id === statusId);
+    const statusName = statusObj?.nome;
     return leads.filter(
-      (lead) => (lead as any).status_id === statusId && !lead.arquivado,
+      (lead) => lead.status === statusName && !lead.arquivado,
     );
   };
 

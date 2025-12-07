@@ -39,7 +39,7 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import FilterMultiSelect from './FilterMultiSelect';
 import FilterDateRange from './FilterDateRange';
 import { useConfirmationModal } from '../hooks/useConfirmationModal';
-import { mapLeadRelations, resolveResponsavelIdByLabel, resolveStatusIdByName } from '../lib/leadRelations';
+import { mapLeadRelations } from '../lib/leadRelations';
 import { getBadgeStyle } from '../lib/colorUtils';
 import {
   AUTO_CONTACT_INTEGRATION_SLUG,
@@ -777,11 +777,8 @@ export default function LeadsManager({
     const updates: Partial<Lead> = {};
     const proximoRetorno = bulkProximoRetorno ? convertLocalToUTC(bulkProximoRetorno) || null : undefined;
 
-    const responsavelId = bulkResponsavel
-      ? resolveResponsavelIdByLabel(responsavelOptions, bulkResponsavel)
-      : null;
-    if (responsavelId) {
-      (updates as any).responsavel_id = responsavelId;
+    if (bulkResponsavel) {
+      updates.responsavel = bulkResponsavel;
     }
     if (proximoRetorno !== undefined) {
       updates.proximo_retorno = proximoRetorno;
@@ -800,7 +797,6 @@ export default function LeadsManager({
           ? {
               ...lead,
               ...updates,
-              responsavel: bulkResponsavel ? bulkResponsavel : lead.responsavel,
             }
           : lead
       )
@@ -994,11 +990,6 @@ export default function LeadsManager({
     if (!lead) return;
 
     const oldStatus = lead.status;
-    const statusId = resolveStatusIdByName(leadStatuses, newStatus);
-    if (!statusId) {
-      console.error('Status não encontrado para atualização');
-      return;
-    }
 
     setLeads((current) =>
       current.map((l) =>
@@ -1012,7 +1003,7 @@ export default function LeadsManager({
       const { error: updateError } = await supabase
         .from('leads')
           .update({
-            status_id: statusId,
+            status: newStatus,
             ultimo_contato: new Date().toISOString(),
           })
         .eq('id', leadId);

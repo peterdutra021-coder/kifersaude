@@ -165,12 +165,11 @@ interface LeadData {
   cep?: string | null;
   endereco?: string | null;
   estado?: string | null;
-  origem_id: string;
-  tipo_contratacao_id: string;
+  origem: string;
+  tipo_contratacao: string;
   operadora_atual?: string | null;
-  status_id: string;
-  status?: string | null;
-  responsavel_id: string;
+  status: string;
+  responsavel: string;
   proximo_retorno?: string | null;
   observacoes?: string | null;
   data_criacao: string;
@@ -239,8 +238,9 @@ function validateLeadData(
 
   const origemId = resolveForeignKey(data.origem_id, data.origem, lookups.originById, lookups.originByName);
   if (!origemId) {
-    errors.push('Campo "origem_id" é obrigatório e deve corresponder a uma origem válida');
+    errors.push('Campo "origem" é obrigatório e deve corresponder a uma origem válida');
   }
+  const origemName = origemId ? lookups.originById.get(origemId) : null;
 
   const tipoContratacaoId = resolveForeignKey(
     data.tipo_contratacao_id,
@@ -249,8 +249,9 @@ function validateLeadData(
     lookups.tipoByLabel,
   );
   if (!tipoContratacaoId) {
-    errors.push('Campo "tipo_contratacao_id" é obrigatório e deve corresponder a um tipo de contratação válido');
+    errors.push('Campo "tipo_contratacao" é obrigatório e deve corresponder a um tipo de contratação válido');
   }
+  const tipoContratacaoLabel = tipoContratacaoId ? lookups.tipoById.get(tipoContratacaoId) : null;
 
   const responsavelId = resolveForeignKey(
     data.responsavel_id,
@@ -259,15 +260,17 @@ function validateLeadData(
     lookups.responsavelByLabel,
   );
   if (!responsavelId) {
-    errors.push('Campo "responsavel_id" é obrigatório e deve corresponder a um responsável válido');
+    errors.push('Campo "responsavel" é obrigatório e deve corresponder a um responsável válido');
   }
+  const responsavelLabel = responsavelId ? lookups.responsavelById.get(responsavelId) : null;
 
   const statusId =
     resolveForeignKey(data.status_id, data.status, lookups.statusById, lookups.statusByName) ||
     lookups.defaultStatusId;
   if (!statusId) {
-    errors.push('Campo "status_id" é obrigatório e deve corresponder a um status válido');
+    errors.push('Campo "status" é obrigatório e deve corresponder a um status válido');
   }
+  const statusName = statusId ? lookups.statusById.get(statusId) : null;
 
   if (data.email && typeof data.email === 'string') {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -311,11 +314,11 @@ function validateLeadData(
     cep: sanitizeOptionalString(data.cep),
     endereco: sanitizeOptionalString(data.endereco),
     estado: sanitizeOptionalString(data.estado),
-    origem_id: origemId!,
-    tipo_contratacao_id: tipoContratacaoId!,
+    origem: origemName!,
+    tipo_contratacao: tipoContratacaoLabel!,
     operadora_atual: sanitizeOptionalString(data.operadora_atual),
-    status_id: statusId!,
-    responsavel_id: responsavelId!,
+    status: statusName!,
+    responsavel: responsavelLabel!,
     proximo_retorno: proximoRetorno,
     observacoes: sanitizeOptionalString(data.observacoes),
     data_criacao: creationDateIsoValue,
@@ -379,9 +382,12 @@ function validateLeadUpdate(
   if (data.origem_id !== undefined || data.origem !== undefined) {
     const origemId = resolveForeignKey(data.origem_id, data.origem, lookups.originById, lookups.originByName);
     if (!origemId) {
-      errors.push('Campo "origem_id" deve corresponder a uma origem válida');
+      errors.push('Campo "origem" deve corresponder a uma origem válida');
     } else {
-      updateData.origem_id = origemId;
+      const origemName = lookups.originById.get(origemId);
+      if (origemName) {
+        updateData.origem = origemName;
+      }
     }
   }
 
@@ -393,9 +399,12 @@ function validateLeadUpdate(
       lookups.tipoByLabel,
     );
     if (!tipoId) {
-      errors.push('Campo "tipo_contratacao_id" deve corresponder a um tipo de contratação válido');
+      errors.push('Campo "tipo_contratacao" deve corresponder a um tipo de contratação válido');
     } else {
-      updateData.tipo_contratacao_id = tipoId;
+      const tipoLabel = lookups.tipoById.get(tipoId);
+      if (tipoLabel) {
+        updateData.tipo_contratacao = tipoLabel;
+      }
     }
   }
 
@@ -407,18 +416,24 @@ function validateLeadUpdate(
       lookups.responsavelByLabel,
     );
     if (!responsavelId) {
-      errors.push('Campo "responsavel_id" deve corresponder a um responsável válido');
+      errors.push('Campo "responsavel" deve corresponder a um responsável válido');
     } else {
-      updateData.responsavel_id = responsavelId;
+      const responsavelLabel = lookups.responsavelById.get(responsavelId);
+      if (responsavelLabel) {
+        updateData.responsavel = responsavelLabel;
+      }
     }
   }
 
   if (data.status_id !== undefined || data.status !== undefined) {
     const statusId = resolveForeignKey(data.status_id, data.status, lookups.statusById, lookups.statusByName);
     if (!statusId) {
-      errors.push('Campo "status_id" deve corresponder a um status válido');
+      errors.push('Campo "status" deve corresponder a um status válido');
     } else {
-      updateData.status_id = statusId;
+      const statusName = lookups.statusById.get(statusId);
+      if (statusName) {
+        updateData.status = statusName;
+      }
     }
   }
 

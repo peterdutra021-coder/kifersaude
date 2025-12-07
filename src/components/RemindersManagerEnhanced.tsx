@@ -507,7 +507,7 @@ export default function RemindersManagerEnhanced() {
       }
 
       const { data, error } = await query
-        .select('id, nome_completo, telefone, responsavel_id, proximo_retorno')
+        .select('id, nome_completo, telefone, responsavel, proximo_retorno')
         .maybeSingle();
 
       if (error) throw error;
@@ -548,7 +548,7 @@ export default function RemindersManagerEnhanced() {
         if (!leadInfo) {
           const { data: leadData } = await supabase
             .from('leads')
-            .select('id, nome_completo, telefone, responsavel_id, proximo_retorno')
+            .select('id, nome_completo, telefone, responsavel, proximo_retorno')
             .eq('id', leadId)
             .maybeSingle();
 
@@ -740,7 +740,7 @@ export default function RemindersManagerEnhanced() {
           if (!leadInfo) {
             const { data: leadData } = await supabase
               .from('leads')
-              .select('id, nome_completo, telefone, responsavel_id, proximo_retorno')
+              .select('id, nome_completo, telefone, responsavel, proximo_retorno')
               .eq('id', leadId)
               .maybeSingle();
 

@@ -16,26 +16,11 @@ export default function LeadNotificationToast({
 }: LeadNotificationToastProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
-  const { leadStatuses, leadOrigins, options } = useConfig();
 
-  const statusId = (lead as any).status_id as string | null | undefined;
-  const origemId = (lead as any).origem_id as string | null | undefined;
-  const tipoContratacaoId = (lead as any).tipo_contratacao_id as string | null | undefined;
-  const responsavelId = (lead as any).responsavel_id as string | null | undefined;
-
-  const status = leadStatuses.find((s) => s.id === statusId);
-  const origem = leadOrigins.find((o) => o.id === origemId);
-  const tipoContratacao = (options.lead_tipo_contratacao || []).find(
-    (t) => t.id === tipoContratacaoId,
-  );
-  const responsavel = (options.lead_responsavel || []).find(
-    (r) => r.id === responsavelId,
-  );
-
-  const statusLabel = status?.nome ?? 'Não definido';
-  const origemLabel = origem?.nome ?? 'Não definida';
-  const tipoContratacaoLabel = tipoContratacao?.label ?? 'Não definido';
-  const responsavelLabel = responsavel?.label ?? 'Não definido';
+  const statusLabel = lead.status ?? 'Não definido';
+  const origemLabel = lead.origem ?? 'Não definida';
+  const tipoContratacaoLabel = lead.tipo_contratacao ?? 'Não definido';
+  const responsavelLabel = lead.responsavel ?? 'Não definido';
 
   useEffect(() => {
     const showTimer = setTimeout(() => setIsVisible(true), 100);
