@@ -332,6 +332,55 @@ function extractPhoneNumber(chatId: string): string {
   return chatId.replace(/@c\.us$|@g\.us$|@lid$/, '');
 }
 
+function getChatIdType(chatId: string): 'group' | 'phone' | 'lid' | 'unknown' {
+  if (chatId.endsWith('@g.us')) return 'group';
+  if (chatId.endsWith('@c.us')) return 'phone';
+  if (chatId.endsWith('@lid')) return 'lid';
+  return 'unknown';
+}
+
+async function findExistingChatByPhone(phoneNumber: string, currentChatId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('whatsapp_chats')
+    .select('id, phone_number, lid')
+    .eq('phone_number', phoneNumber)
+    .neq('id', currentChatId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data.id;
+}
+
+async function mergeChatMessages(fromChatId: string, toChatId: string) {
+  console.log('whatsapp-webhook: mesclando mensagens de chats duplicados', {
+    fromChatId,
+    toChatId,
+  });
+
+  const { error: updateError } = await supabase
+    .from('whatsapp_messages')
+    .update({ chat_id: toChatId })
+    .eq('chat_id', fromChatId);
+
+  if (updateError) {
+    console.error('whatsapp-webhook: erro ao mesclar mensagens', updateError);
+    return;
+  }
+
+  const { error: deleteError } = await supabase
+    .from('whatsapp_chats')
+    .delete()
+    .eq('id', fromChatId);
+
+  if (deleteError) {
+    console.error('whatsapp-webhook: erro ao deletar chat duplicado', deleteError);
+  }
+}
+
 async function findLeadByPhone(phoneNumber: string): Promise<string | null> {
   const cleanPhone = phoneNumber.replace(/\D/g, '');
 
@@ -395,19 +444,74 @@ async function resolveChatName(message: NormalizedMessage): Promise<string> {
 async function upsertChat(message: NormalizedMessage) {
   const lastMessageAt = message.timestamp ?? new Date().toISOString();
   const chatName = await resolveChatName(message);
+  const chatIdType = getChatIdType(message.chatId);
+
+  const phoneNumber = !message.isGroup ? extractPhoneNumber(message.chatId) : null;
+  const lid = chatIdType === 'lid' ? message.chatId : null;
 
   console.log('whatsapp-webhook: upsert chat', {
     chatId: message.chatId,
     chatName,
+    chatIdType,
+    phoneNumber,
+    lid,
     direction: message.direction,
     contactName: message.contactName,
   });
+
+  if (phoneNumber && !message.isGroup) {
+    const existingChatId = await findExistingChatByPhone(phoneNumber, message.chatId);
+
+    if (existingChatId) {
+      console.log('whatsapp-webhook: chat existente encontrado para o mesmo telefone', {
+        newChatId: message.chatId,
+        existingChatId,
+        phoneNumber,
+      });
+
+      await mergeChatMessages(message.chatId, existingChatId);
+
+      const { data: existingChat } = await supabase
+        .from('whatsapp_chats')
+        .select('lid')
+        .eq('id', existingChatId)
+        .maybeSingle();
+
+      const updateData: any = {
+        name: chatName,
+        last_message_at: lastMessageAt,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (lid && !existingChat?.lid) {
+        updateData.lid = lid;
+        console.log('whatsapp-webhook: vinculando LID ao chat existente', {
+          chatId: existingChatId,
+          lid,
+        });
+      }
+
+      const { error: updateError } = await supabase
+        .from('whatsapp_chats')
+        .update(updateData)
+        .eq('id', existingChatId);
+
+      if (updateError) {
+        throw new Error(`Erro ao atualizar chat existente: ${updateError.message}`);
+      }
+
+      message.chatId = existingChatId;
+      return;
+    }
+  }
 
   const { error } = await supabase.from('whatsapp_chats').upsert(
     {
       id: message.chatId,
       name: chatName,
       is_group: message.isGroup,
+      phone_number: phoneNumber,
+      lid: lid,
       last_message_at: lastMessageAt,
       updated_at: new Date().toISOString(),
     },
