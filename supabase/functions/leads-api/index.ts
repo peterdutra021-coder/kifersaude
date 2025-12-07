@@ -627,7 +627,7 @@ async function triggerAutoContactForLead({
         'x-api-key': settings.apiKey,
       },
       body: JSON.stringify({
-        chatId: `${normalizedPhone}@c.us`,
+        chatId: `55${normalizedPhone}@c.us`,
         contentType: 'string',
         content: message,
       }),

@@ -111,7 +111,7 @@ export async function sendAutoContactMessage({
     throw new Error('Session ID não configurado na integração de mensagens automáticas.');
   }
 
-  const chatId = `${normalizedPhone}@c.us`;
+  const chatId = `55${normalizedPhone}@c.us`;
   const payload = {
     chatId,
     contentType: 'string' as const,
