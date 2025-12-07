@@ -242,29 +242,37 @@ function resolveContactName(payload: Record<string, unknown>): string | null {
 
 function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMessage | null {
   const messageId = (payload?.id as any)?._serialized || (payload?.id as any)?.id;
-  const chatId = resolveChatId(payload);
+  const direction: 'inbound' | 'outbound' = payload?.fromMe ? 'outbound' : 'inbound';
+
+  const fromNumber = typeof payload.from === 'string' ? payload.from : null;
+  const toNumber = typeof payload.to === 'string' ? payload.to : null;
+
+  const chatId = direction === 'outbound' ? toNumber : fromNumber;
 
   console.log('whatsapp-webhook: normalizando payload de mensagem', {
     messageId,
+    direction,
+    fromNumber,
+    toNumber,
     chatId,
     hasId: !!payload.id,
     idStructure: payload.id ? Object.keys(payload.id as any) : [],
     hasData: !!payload._data,
-    from: payload.from,
-    to: payload.to,
   });
 
   if (!messageId || !chatId) {
     console.error('whatsapp-webhook: mensagem sem messageId ou chatId', {
       messageId,
       chatId,
+      direction,
+      fromNumber,
+      toNumber,
       payloadKeys: Object.keys(payload),
       idObject: payload.id,
     });
     return null;
   }
 
-  const direction: 'inbound' | 'outbound' = payload?.fromMe ? 'outbound' : 'inbound';
   const timestamp = toIsoString(resolveTimestamp(payload));
   const contactName = resolveContactName(payload);
   const chatIdLower = chatId.toLowerCase();
@@ -274,8 +282,8 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
     chatId,
     messageId,
     direction,
-    fromNumber: typeof payload.from === 'string' ? payload.from : null,
-    toNumber: typeof payload.to === 'string' ? payload.to : null,
+    fromNumber,
+    toNumber,
     type: typeof payload.type === 'string' ? payload.type : null,
     body: typeof payload.body === 'string' ? payload.body : null,
     hasMedia: Boolean(payload.hasMedia),
