@@ -1,23 +1,30 @@
 import { supabase } from './supabase';
 
 interface WhatsAppSettings {
-  api_url: string;
-  api_key: string;
-  session_id: string;
+  baseUrl: string;
+  apiKey: string;
+  sessionId: string;
+  enabled?: boolean;
 }
 
 async function getWhatsAppSettings(): Promise<WhatsAppSettings> {
   const { data, error } = await supabase
     .from('integration_settings')
     .select('settings')
-    .eq('integration_type', 'whatsapp_api')
+    .eq('slug', 'whatsapp_auto_contact')
     .maybeSingle();
 
   if (error || !data?.settings) {
     throw new Error('WhatsApp API não configurado');
   }
 
-  return data.settings as WhatsAppSettings;
+  const settings = data.settings as WhatsAppSettings;
+
+  if (!settings.baseUrl || !settings.apiKey || !settings.sessionId) {
+    throw new Error('WhatsApp API não configurado completamente. Verifique as configurações em Automação do WhatsApp.');
+  }
+
+  return settings;
 }
 
 export interface SendMessageParams {
@@ -45,12 +52,12 @@ export async function sendWhatsAppMessage(params: SendMessageParams) {
   }
 
   const response = await fetch(
-    `${settings.api_url}/client/sendMessage/${settings.session_id}`,
+    `${settings.baseUrl}/client/sendMessage/${settings.sessionId}`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': settings.api_key,
+        'x-api-key': settings.apiKey,
       },
       body: JSON.stringify({
         chatId: params.chatId,
@@ -73,12 +80,12 @@ export async function sendTypingState(chatId: string) {
   const settings = await getWhatsAppSettings();
 
   const response = await fetch(
-    `${settings.api_url}/chat/sendStateTyping/${settings.session_id}`,
+    `${settings.baseUrl}/chat/sendStateTyping/${settings.sessionId}`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': settings.api_key,
+        'x-api-key': settings.apiKey,
       },
       body: JSON.stringify({ chatId }),
     }
@@ -95,12 +102,12 @@ export async function sendRecordingState(chatId: string) {
   const settings = await getWhatsAppSettings();
 
   const response = await fetch(
-    `${settings.api_url}/chat/sendStateRecording/${settings.session_id}`,
+    `${settings.baseUrl}/chat/sendStateRecording/${settings.sessionId}`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': settings.api_key,
+        'x-api-key': settings.apiKey,
       },
       body: JSON.stringify({ chatId }),
     }
