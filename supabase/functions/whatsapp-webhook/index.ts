@@ -304,13 +304,71 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
   return normalized;
 }
 
+function extractPhoneNumber(chatId: string): string {
+  return chatId.replace(/@c\.us$|@g\.us$|@lid$/, '');
+}
+
+async function findLeadByPhone(phoneNumber: string): Promise<string | null> {
+  const cleanPhone = phoneNumber.replace(/\D/g, '');
+
+  const { data, error } = await supabase
+    .from('leads')
+    .select('nome_completo, telefone')
+    .or(`telefone.eq.${phoneNumber},telefone.eq.${cleanPhone}`)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data.nome_completo;
+}
+
+async function resolveChatName(message: NormalizedMessage): Promise<string> {
+  const phoneNumber = extractPhoneNumber(message.chatId);
+
+  const leadName = await findLeadByPhone(phoneNumber);
+  if (leadName) {
+    console.log('whatsapp-webhook: nome do lead encontrado no CRM', {
+      chatId: message.chatId,
+      leadName,
+    });
+    return leadName;
+  }
+
+  if (message.direction === 'inbound' && message.contactName) {
+    return message.contactName;
+  }
+
+  const { data: existingChat } = await supabase
+    .from('whatsapp_chats')
+    .select('name')
+    .eq('id', message.chatId)
+    .maybeSingle();
+
+  if (existingChat?.name) {
+    return existingChat.name;
+  }
+
+  return message.contactName ?? message.chatId;
+}
+
 async function upsertChat(message: NormalizedMessage) {
   const lastMessageAt = message.timestamp ?? new Date().toISOString();
+  const chatName = await resolveChatName(message);
+
+  console.log('whatsapp-webhook: upsert chat', {
+    chatId: message.chatId,
+    chatName,
+    direction: message.direction,
+    contactName: message.contactName,
+  });
 
   const { error } = await supabase.from('whatsapp_chats').upsert(
     {
       id: message.chatId,
-      name: message.contactName ?? message.chatId,
+      name: chatName,
       is_group: message.isGroup,
       last_message_at: lastMessageAt,
       updated_at: new Date().toISOString(),
