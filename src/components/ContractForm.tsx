@@ -154,6 +154,25 @@ export default function ContractForm({ contract, leadToConvert, onClose, onSave 
     }
   }, [contract?.id, convertibleLeadStatuses]);
 
+  const calculateAdjustedValue = (baseValue: number): number => {
+    let total = baseValue;
+    adjustments.forEach(adj => {
+      if (adj.tipo === 'acrescimo') {
+        total += adj.valor;
+      } else {
+        total -= adj.valor;
+      }
+    });
+    return total;
+  };
+
+  const baseMensalidade = parseFloat(formData.mensalidade_total || '0') || 0;
+
+  const adjustedMensalidade = useMemo(
+    () => calculateAdjustedValue(baseMensalidade),
+    [baseMensalidade, adjustments]
+  );
+
   useEffect(() => {
     if (adjustedMensalidade > 0) {
       const multiplicador = parseFloat(formData.comissao_multiplicador || '0');
@@ -258,25 +277,6 @@ export default function ContractForm({ contract, leadToConvert, onClose, onSave 
       console.error('Erro ao carregar ajustes:', error);
     }
   };
-
-  const calculateAdjustedValue = (baseValue: number): number => {
-    let total = baseValue;
-    adjustments.forEach(adj => {
-      if (adj.tipo === 'acrescimo') {
-        total += adj.valor;
-      } else {
-        total -= adj.valor;
-      }
-    });
-    return total;
-  };
-
-  const baseMensalidade = parseFloat(formData.mensalidade_total || '0') || 0;
-
-  const adjustedMensalidade = useMemo(
-    () => calculateAdjustedValue(baseMensalidade),
-    [baseMensalidade, adjustments]
-  );
 
   const vidasNumber = parseFloat(formData.vidas || '1') || 1;
   const bonusPorVidaValor = parseFloat(formData.bonus_por_vida_valor || '0') || 0;
