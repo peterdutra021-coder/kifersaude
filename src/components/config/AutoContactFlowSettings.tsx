@@ -154,22 +154,20 @@ export default function AutoContactFlowSettings() {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-teal-600 text-white shadow-sm">
-            <MessageCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Fluxo de automação do WhatsApp</h3>
-            <p className="text-sm text-slate-600 mt-0.5">
-              Configure mensagens automáticas com variáveis personalizadas
-            </p>
-          </div>
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div className="flex items-center space-x-3 mb-6">
+        <div className="p-2 rounded-full bg-teal-100 text-teal-700">
+          <MessageCircle className="w-5 h-5" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">Fluxo de automação do WhatsApp</h3>
+          <p className="text-sm text-slate-500">
+            Configure mensagens automáticas com variáveis personalizadas
+          </p>
         </div>
       </div>
 
-      <div className="p-6 space-y-5">
+      <div className="space-y-5">
         {statusMessage && (
           <div
             className={`p-3 rounded-lg border text-sm flex items-center gap-2 ${
@@ -198,7 +196,7 @@ export default function AutoContactFlowSettings() {
           {messageFlowDraft.map((step, index) => {
             const isExpanded = expandedSteps.has(step.id);
             const previewText = step.message.slice(0, 60) + (step.message.length > 60 ? '...' : '');
-            const delayMinutes = Number(step.delaySeconds ?? 0) / 60;
+            const delaySeconds = Number(step.delaySeconds ?? 0);
 
             return (
               <div
@@ -220,9 +218,9 @@ export default function AutoContactFlowSettings() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium text-slate-800">Mensagem {index + 1}</span>
-                        {delayMinutes > 0 && (
+                        {delaySeconds > 0 && (
                           <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                            Aguarda {delayMinutes}min
+                            Aguarda {delaySeconds}s
                           </span>
                         )}
                         <span
@@ -286,14 +284,14 @@ export default function AutoContactFlowSettings() {
 
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Aguardar antes do envio (minutos)
+                        Aguardar antes do envio (segundos)
                       </label>
                       <input
                         type="number"
                         min={0}
-                        step="0.5"
-                        value={delayMinutes}
-                        onChange={(event) => handleUpdateFlowStep(step.id, { delaySeconds: Number(event.target.value) * 60 })}
+                        step="1"
+                        value={delaySeconds}
+                        onChange={(event) => handleUpdateFlowStep(step.id, { delaySeconds: Number(event.target.value) })}
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                         placeholder="0"
                       />
