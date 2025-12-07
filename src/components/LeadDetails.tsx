@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Lead, Interaction } from '../lib/supabase';
-import { X, MessageCircle, Plus, Pencil, Trash2, Sparkles, Loader2, Copy, Check } from 'lucide-react';
+import { X, MessageCircle, Plus, Pencil, Trash2 } from 'lucide-react';
 import { formatDateTimeFullBR } from '../lib/dateUtils';
 import { useAuth } from '../contexts/AuthContext';
 import LeadStatusHistoryComponent from './LeadStatusHistory';
@@ -24,10 +24,6 @@ export default function LeadDetails({ lead, onClose, onUpdate, onEdit, onDelete 
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [generatingFollowUp, setGeneratingFollowUp] = useState(false);
-  const [generatedFollowUp, setGeneratedFollowUp] = useState<string | null>(null);
-  const [followUpError, setFollowUpError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [formData, setFormData] = useState({
     tipo: 'Observação',
     descricao: '',
@@ -53,73 +49,6 @@ export default function LeadDetails({ lead, onClose, onUpdate, onEdit, onDelete 
       console.error('Erro ao carregar interações:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const buildConversationHistory = () => {
-    if (interactions.length === 0) {
-      return 'Nenhuma interação registrada ainda. Considere que esta pode ser a primeira mensagem após o cadastro.';
-    }
-
-    const chronological = [...interactions].reverse();
-
-    return chronological
-      .map(
-        (interaction) =>
-          `- [${formatDateTimeFullBR(interaction.data_interacao)}] ${interaction.responsavel} (${interaction.tipo}): ${interaction.descricao}`,
-      )
-      .join('\n');
-  };
-
-  const handleGenerateFollowUp = async () => {
-    setGeneratingFollowUp(true);
-    setFollowUpError(null);
-    setGeneratedFollowUp(null);
-    setCopied(false);
-
-    const conversationHistory = buildConversationHistory();
-    const leadContext = [
-      `Telefone: ${lead.telefone}`,
-      lead.email ? `E-mail: ${lead.email}` : null,
-      `Status: ${lead.status_nome ?? lead.status ?? 'Sem status'}`,
-      `Responsável: ${lead.responsavel_label ?? lead.responsavel ?? 'Sem responsável'}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    try {
-      const { data, error } = await supabase.functions.invoke<{ followUp?: string }>('generate-follow-up', {
-        body: {
-          leadName: lead.nome_completo,
-          conversationHistory,
-          leadContext,
-        },
-      });
-
-      if (error) throw error;
-
-      if (!data?.followUp) {
-        throw new Error('Resposta vazia do gerador de follow-up.');
-      }
-
-      setGeneratedFollowUp(data.followUp.trim());
-    } catch (error) {
-      console.error('Erro ao gerar follow-up:', error);
-      setFollowUpError('Não foi possível gerar o follow-up automaticamente. Tente novamente em instantes.');
-    } finally {
-      setGeneratingFollowUp(false);
-    }
-  };
-
-  const handleCopyFollowUp = async () => {
-    if (!generatedFollowUp) return;
-
-    try {
-      await navigator.clipboard.writeText(generatedFollowUp);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error('Erro ao copiar follow-up:', error);
     }
   };
 
@@ -229,65 +158,6 @@ export default function LeadDetails({ lead, onClose, onUpdate, onEdit, onDelete 
 
           <div className="mb-6">
             <LeadStatusHistoryComponent leadId={lead.id} />
-          </div>
-
-          <div className="mb-6 rounded-lg border border-slate-200 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-slate-900">
-                  <Sparkles className="h-5 w-5 text-teal-600" />
-                  <h4 className="text-lg font-semibold">Gerar follow-up com IA</h4>
-                </div>
-                <p className="mt-1 text-sm text-slate-600">
-                  Use o histórico de interações para criar uma mensagem personalizada de retorno.
-                </p>
-              </div>
-              <button
-                onClick={handleGenerateFollowUp}
-                disabled={generatingFollowUp}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:opacity-70 sm:w-auto"
-              >
-                {generatingFollowUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                <span>{generatingFollowUp ? 'Gerando...' : 'Gerar follow-up'}</span>
-              </button>
-            </div>
-
-            {followUpError && (
-              <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{followUpError}</p>
-            )}
-
-            {generatingFollowUp && !followUpError && (
-              <div className="mt-4 flex items-center gap-3 text-sm text-slate-600">
-                <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
-                <span>Analisando histórico do lead...</span>
-              </div>
-            )}
-
-            {generatedFollowUp && (
-              <div className="mt-4 rounded-lg bg-slate-50 p-4">
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="text-sm font-semibold text-slate-900">Sugestão pronta para envio</div>
-                  <button
-                    type="button"
-                    onClick={handleCopyFollowUp}
-                    className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-white"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="h-4 w-4 text-teal-600" />
-                        <span>Copiado</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-4 w-4" />
-                        <span>Copiar</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <p className="whitespace-pre-wrap text-sm text-slate-800">{generatedFollowUp}</p>
-              </div>
-            )}
           </div>
 
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
