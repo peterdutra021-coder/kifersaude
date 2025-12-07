@@ -9,6 +9,7 @@ const MODULES = [
   { id: 'contracts', label: 'Contratos', description: 'Gestão de contratos, titulares e dependentes.' },
   { id: 'reminders', label: 'Lembretes', description: 'Agenda e lembretes automáticos para acompanhamento.' },
   { id: 'email', label: 'Email', description: 'Comunicação via email e templates.' },
+  { id: 'whatsapp', label: 'WhatsApp', description: 'Gestão de conversas e mensagens do WhatsApp.' },
   { id: 'blog', label: 'Blog', description: 'Gestão de conteúdo do blog e SEO.' },
   { id: 'config', label: 'Configurações', description: 'Personalização do sistema e cadastros auxiliares.' },
 ] as const;

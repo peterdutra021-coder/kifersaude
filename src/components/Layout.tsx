@@ -73,6 +73,7 @@ export default function Layout({
   ].filter(child => canView(child.id));
 
   const comunicacaoChildren = [
+    { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
     { id: 'blog', label: 'Blog', icon: BookOpen },
   ].filter(child => canView(child.id));
 
