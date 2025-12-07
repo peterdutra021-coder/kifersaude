@@ -106,27 +106,33 @@ export default function IntegrationsTab() {
   }
 
   return (
-    <div className="space-y-6">
-      <AutoContactFlowSettings />
-
-      {gptMessage && (
-        <div
-          className={`p-4 rounded-lg border flex items-center space-x-3 ${
-            gptMessage.type === 'success'
-              ? 'bg-green-50 border-green-200 text-green-800'
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}
-        >
-          {gptMessage.type === 'success' ? (
-            <ShieldCheck className="w-5 h-5" />
-          ) : (
-            <Info className="w-5 h-5" />
-          )}
-          <p>{gptMessage.text}</p>
+    <div className="space-y-8">
+      <div>
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-slate-900">Configurações da API</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Configure as integrações de API externas usadas pelo sistema
+          </p>
         </div>
-      )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        {gptMessage && (
+          <div
+            className={`p-4 rounded-lg border flex items-center space-x-3 mb-4 ${
+              gptMessage.type === 'success'
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}
+          >
+            {gptMessage.type === 'success' ? (
+              <ShieldCheck className="w-5 h-5" />
+            ) : (
+              <Info className="w-5 h-5" />
+            )}
+            <p>{gptMessage.text}</p>
+          </div>
+        )}
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex items-center space-x-3 mb-4">
           <div className="p-2 rounded-full bg-teal-100 text-teal-700">
             <Plug className="w-5 h-5" />
@@ -224,8 +230,18 @@ export default function IntegrationsTab() {
             <span>{savingGpt ? 'Salvando...' : 'Salvar integração'}</span>
           </button>
         </div>
+        </div>
       </div>
 
+      <div>
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-slate-900">Automação do WhatsApp</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Configure o fluxo automático de contato com leads via WhatsApp
+          </p>
+        </div>
+        <AutoContactFlowSettings />
+      </div>
     </div>
   );
 }
