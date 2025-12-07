@@ -24,6 +24,7 @@ type NormalizedMessage = {
   timestamp: string | null;
   contactName: string | null;
   isGroup: boolean;
+  author: string | null;
   ackStatus: number | null;
   payload: Record<string, unknown>;
 };
@@ -221,6 +222,9 @@ function resolveContactName(payload: Record<string, unknown>): string | null {
   const senderId = normalizeJson(sender.id);
   const _data = normalizeJson(payload._data);
 
+  const author = typeof payload.author === 'string' ? payload.author : null;
+  const isGroup = typeof payload.from === 'string' && payload.from.endsWith('@g.us');
+
   const candidates = [
     payload.notifyName,
     _data.notifyName,
@@ -230,6 +234,7 @@ function resolveContactName(payload: Record<string, unknown>): string | null {
     sender.formattedName,
     senderId.user,
     payload.chat && normalizeJson((payload as any).chat).name,
+    isGroup && author ? author : null,
   ];
 
   for (const candidate of candidates) {
@@ -242,6 +247,17 @@ function resolveContactName(payload: Record<string, unknown>): string | null {
 }
 
 function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMessage | null {
+  const messageType = typeof payload.type === 'string' ? payload.type : null;
+
+  const isGroupSystemMessage = messageType === 'gp2' || messageType === 'e2e_notification';
+  if (isGroupSystemMessage) {
+    console.log('whatsapp-webhook: ignorando mensagem de sistema do grupo', {
+      type: messageType,
+      subtype: (payload as any).subtype,
+    });
+    return null;
+  }
+
   const messageId = (payload?.id as any)?._serialized || (payload?.id as any)?.id;
   const direction: 'inbound' | 'outbound' = payload?.fromMe ? 'outbound' : 'inbound';
 
@@ -256,6 +272,7 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
     fromNumber,
     toNumber,
     chatId,
+    type: messageType,
     hasId: !!payload.id,
     idStructure: payload.id ? Object.keys(payload.id as any) : [],
     hasData: !!payload._data,
@@ -268,6 +285,7 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
       direction,
       fromNumber,
       toNumber,
+      type: messageType,
       payloadKeys: Object.keys(payload),
       idObject: payload.id,
     });
@@ -279,6 +297,7 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
   const chatIdLower = chatId.toLowerCase();
   const isGroup = chatIdLower.endsWith('@g.us') || Boolean((payload as any).isGroup);
 
+  const author = isGroup && typeof payload.author === 'string' ? payload.author : null;
   const ackStatus = typeof payload.ack === 'number' ? payload.ack : null;
 
   const normalized = {
@@ -293,6 +312,7 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
     timestamp,
     contactName,
     isGroup,
+    author,
     ackStatus,
     payload: normalizePayload(payload),
   };
@@ -330,6 +350,20 @@ async function findLeadByPhone(phoneNumber: string): Promise<string | null> {
 }
 
 async function resolveChatName(message: NormalizedMessage): Promise<string> {
+  if (message.isGroup) {
+    const { data: existingChat } = await supabase
+      .from('whatsapp_chats')
+      .select('name')
+      .eq('id', message.chatId)
+      .maybeSingle();
+
+    if (existingChat?.name) {
+      return existingChat.name;
+    }
+
+    return message.contactName ?? message.chatId;
+  }
+
   const phoneNumber = extractPhoneNumber(message.chatId);
 
   const leadName = await findLeadByPhone(phoneNumber);
@@ -398,6 +432,7 @@ async function upsertMessage(message: NormalizedMessage) {
       timestamp: message.timestamp,
       payload: message.payload,
       direction: message.direction,
+      author: message.author,
       ack_status: message.ackStatus,
     },
     { onConflict: 'id' },
