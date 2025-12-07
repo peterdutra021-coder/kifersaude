@@ -101,6 +101,29 @@ function normalizePayload(value: Record<string, unknown>): Record<string, unknow
   return JSON.parse(JSON.stringify(value));
 }
 
+function unwrapPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  if (payload.message && typeof payload.message === 'object') {
+    const messageData = payload.message as Record<string, unknown>;
+
+    const unwrapped = { ...messageData };
+
+    const _data = normalizeJson(messageData._data);
+    if (Object.keys(_data).length > 0) {
+      unwrapped._data = _data;
+    }
+
+    console.log('whatsapp-webhook: payload desencapsulado de "message" wrapper', {
+      originalKeys: Object.keys(payload),
+      unwrappedKeys: Object.keys(unwrapped),
+      hasData: !!unwrapped._data,
+    });
+
+    return unwrapped;
+  }
+
+  return payload;
+}
+
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && !Number.isNaN(value)) {
     return value;
@@ -117,13 +140,16 @@ function toNumber(value: unknown): number | null {
 }
 
 function resolveTimestamp(payload: Record<string, unknown>): number | null {
+  const _data = normalizeJson(payload._data);
+
   const candidates = [
     payload.timestamp,
     (payload as any).t,
     (payload as any).ts,
-    normalizeJson(payload._data)?.t,
-    normalizeJson(payload._data)?.timestamp,
-    normalizeJson(payload._data)?.ts,
+    _data.t,
+    _data.timestamp,
+    _data.ts,
+    _data.clientReceivedTsMillis,
     (payload as any).clientReceivedTsMillis,
   ];
 
@@ -133,8 +159,6 @@ function resolveTimestamp(payload: Record<string, unknown>): number | null {
       continue;
     }
 
-    // Some providers send timestamps em milissegundos; se estiver muito grande,
-    // converte para segundos para manter consistência com o restante do código.
     if (numeric > 1_000_000_000_000) {
       return Math.floor(numeric / 1000);
     }
@@ -146,7 +170,17 @@ function resolveTimestamp(payload: Record<string, unknown>): number | null {
 }
 
 function resolveChatId(payload: Record<string, unknown>): string | null {
-  const candidates = [payload.chatId, payload.from, payload.to, payload?.id && (payload as any).id?.remote];
+  const _data = normalizeJson(payload._data);
+  const id = normalizeJson(payload.id);
+
+  const candidates = [
+    payload.chatId,
+    payload.from,
+    _data.from,
+    id.remote,
+    payload.to,
+    _data.to,
+  ];
 
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate.trim()) {
@@ -160,9 +194,11 @@ function resolveChatId(payload: Record<string, unknown>): string | null {
 function resolveContactName(payload: Record<string, unknown>): string | null {
   const sender = normalizeJson(payload.sender);
   const senderId = normalizeJson(sender.id);
+  const _data = normalizeJson(payload._data);
 
   const candidates = [
     payload.notifyName,
+    _data.notifyName,
     sender.pushname,
     sender.name,
     sender.shortName,
@@ -184,7 +220,23 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
   const messageId = (payload?.id as any)?._serialized || (payload?.id as any)?.id;
   const chatId = resolveChatId(payload);
 
+  console.log('whatsapp-webhook: normalizando payload de mensagem', {
+    messageId,
+    chatId,
+    hasId: !!payload.id,
+    idStructure: payload.id ? Object.keys(payload.id as any) : [],
+    hasData: !!payload._data,
+    from: payload.from,
+    to: payload.to,
+  });
+
   if (!messageId || !chatId) {
+    console.error('whatsapp-webhook: mensagem sem messageId ou chatId', {
+      messageId,
+      chatId,
+      payloadKeys: Object.keys(payload),
+      idObject: payload.id,
+    });
     return null;
   }
 
@@ -194,7 +246,7 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
   const chatIdLower = chatId.toLowerCase();
   const isGroup = chatIdLower.endsWith('@g.us') || Boolean((payload as any).isGroup);
 
-  return {
+  const normalized = {
     chatId,
     messageId,
     direction,
@@ -208,6 +260,16 @@ function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMe
     isGroup,
     payload: normalizePayload(payload),
   };
+
+  console.log('whatsapp-webhook: mensagem normalizada', {
+    messageId: normalized.messageId,
+    chatId: normalized.chatId,
+    direction: normalized.direction,
+    contactName: normalized.contactName,
+    body: normalized.body?.substring(0, 50),
+  });
+
+  return normalized;
 }
 
 async function upsertChat(message: NormalizedMessage) {
@@ -284,6 +346,13 @@ Deno.serve(async (req) => {
   const headers = extractHeaders(req.headers);
   const eventName = extractEventName(payload, req.headers, url);
 
+  console.log('whatsapp-webhook: evento recebido', {
+    eventName,
+    payloadKeys: Object.keys(payload),
+    hasMessage: !!payload.message,
+    url: url.toString(),
+  });
+
   try {
     await storeEvent({ event: eventName, payload, headers });
   } catch (error) {
@@ -295,7 +364,8 @@ Deno.serve(async (req) => {
   const shouldHandleMessage = ['message', 'message_create', 'message_ack'].includes(eventName);
 
   if (shouldHandleMessage) {
-    const normalized = normalizeMessagePayload(payload);
+    const unwrapped = unwrapPayload(payload);
+    const normalized = normalizeMessagePayload(unwrapped);
 
     if (!normalized) {
       console.warn('whatsapp-webhook: mensagem ignorada por falta de dados essenciais', { payload, eventName });
