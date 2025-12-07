@@ -47,16 +47,7 @@ export default function WhatsAppApiSettings() {
 
     try {
       const integration = await configService.getIntegrationSetting(AUTO_CONTACT_INTEGRATION_SLUG);
-
-      console.log('[WhatsAppApiSettings] Loaded from DB:', {
-        integration,
-        settings: integration?.settings,
-        id: integration?.id
-      });
-
       const normalized = normalizeAutoContactSettings(integration?.settings);
-
-      console.log('[WhatsAppApiSettings] After normalization:', normalized);
 
       setAutoContactIntegration(integration);
       setAutoContactSettings(normalized);
@@ -69,13 +60,6 @@ export default function WhatsAppApiSettings() {
       const validStatusIds = leadStatuses.map(s => s.id);
       const isValidStatus = normalized.statusOnSend && validStatusIds.includes(normalized.statusOnSend);
       const finalStatus = isValidStatus ? normalized.statusOnSend : leadStatuses[0]?.id || '';
-
-      console.log('[WhatsAppApiSettings] Status check:', {
-        fromDB: normalized.statusOnSend,
-        isValid: isValidStatus,
-        finalStatus,
-        validStatusIds
-      });
 
       setStatusOnSend(finalStatus);
     } catch (error) {
@@ -115,16 +99,9 @@ export default function WhatsAppApiSettings() {
       messageFlow: currentMessageFlow,
     };
 
-    console.log('[WhatsAppApiSettings] Saving settings:', {
-      currentState: { enabled, baseUrl, sessionId, apiKey, statusOnSend },
-      newSettings
-    });
-
     const { data, error } = await configService.updateIntegrationSetting(autoContactIntegration.id, {
       settings: newSettings,
     });
-
-    console.log('[WhatsAppApiSettings] Save result:', { data: data?.settings, error });
 
     if (error) {
       setStatusMessage({ type: 'error', text: 'Erro ao salvar a configuração. Tente novamente.' });
