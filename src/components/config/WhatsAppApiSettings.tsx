@@ -57,9 +57,9 @@ export default function WhatsAppApiSettings() {
       setSessionId(normalized.sessionId);
       setApiKey(normalized.apiKey);
 
-      const validStatusIds = leadStatuses.map(s => s.id);
-      const isValidStatus = normalized.statusOnSend && validStatusIds.includes(normalized.statusOnSend);
-      const finalStatus = isValidStatus ? normalized.statusOnSend : leadStatuses[0]?.id || '';
+      const validStatusNames = leadStatuses.map(s => s.nome);
+      const isValidStatus = normalized.statusOnSend && validStatusNames.includes(normalized.statusOnSend);
+      const finalStatus = isValidStatus ? normalized.statusOnSend : leadStatuses[0]?.nome || '';
 
       setStatusOnSend(finalStatus);
     } catch (error) {
@@ -116,9 +116,9 @@ export default function WhatsAppApiSettings() {
       setSessionId(normalized.sessionId);
       setApiKey(normalized.apiKey);
 
-      const validStatusIds = leadStatuses.map(s => s.id);
-      const isValidStatus = normalized.statusOnSend && validStatusIds.includes(normalized.statusOnSend);
-      setStatusOnSend(isValidStatus ? normalized.statusOnSend : leadStatuses[0]?.id || '');
+      const validStatusNames = leadStatuses.map(s => s.nome);
+      const isValidStatus = normalized.statusOnSend && validStatusNames.includes(normalized.statusOnSend);
+      setStatusOnSend(isValidStatus ? normalized.statusOnSend : leadStatuses[0]?.nome || '');
 
       setStatusMessage({ type: 'success', text: 'Configuração salva com sucesso.' });
     }
@@ -237,7 +237,7 @@ export default function WhatsAppApiSettings() {
                 <option value="">Carregando status...</option>
               )}
               {leadStatuses.map((status) => (
-                <option key={status.id} value={status.id}>
+                <option key={status.id} value={status.nome}>
                   {status.nome}
                 </option>
               ))}
