@@ -63,8 +63,16 @@ export default function WhatsAppTab() {
       })
       .subscribe();
 
+    const messagesGlobalSubscription = supabase
+      .channel('whatsapp_messages_global')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_messages' }, () => {
+        loadChats();
+      })
+      .subscribe();
+
     return () => {
       chatsSubscription.unsubscribe();
+      messagesGlobalSubscription.unsubscribe();
     };
   }, []);
 
