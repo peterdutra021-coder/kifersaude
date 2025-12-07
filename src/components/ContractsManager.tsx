@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase, Contract, Lead } from '../lib/supabase';
-import { Plus, Search, Filter, FileText, Eye, AlertCircle, Trash2, Users } from 'lucide-react';
+import { Plus, Search, Filter, FileText, Eye, AlertCircle, Trash2, Users, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConfig } from '../contexts/ConfigContext';
 import ContractForm from './ContractForm';
