@@ -62,6 +62,7 @@ function extractEventName(payload: any, headers: Headers, url: URL): string {
   }
 
   const bodyEvent =
+    (typeof payload?.dataType === 'string' && payload.dataType) ||
     (typeof payload?.event === 'string' && payload.event) ||
     (typeof payload?.type === 'string' && payload.type) ||
     (typeof payload?.status === 'string' && payload.status);
@@ -102,6 +103,29 @@ function normalizePayload(value: Record<string, unknown>): Record<string, unknow
 }
 
 function unwrapPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  if (payload.data && typeof payload.data === 'object') {
+    const dataWrapper = payload.data as Record<string, unknown>;
+
+    if (dataWrapper.message && typeof dataWrapper.message === 'object') {
+      const messageData = dataWrapper.message as Record<string, unknown>;
+      const unwrapped = { ...messageData };
+
+      const _data = normalizeJson(messageData._data);
+      if (Object.keys(_data).length > 0) {
+        unwrapped._data = _data;
+      }
+
+      console.log('whatsapp-webhook: payload desencapsulado de "data.message" wrapper', {
+        originalKeys: Object.keys(payload),
+        dataKeys: Object.keys(dataWrapper),
+        unwrappedKeys: Object.keys(unwrapped),
+        hasData: !!unwrapped._data,
+      });
+
+      return unwrapped;
+    }
+  }
+
   if (payload.message && typeof payload.message === 'object') {
     const messageData = payload.message as Record<string, unknown>;
 
@@ -361,7 +385,7 @@ Deno.serve(async (req) => {
     return respond({ error: message }, { status: 500 });
   }
 
-  const shouldHandleMessage = ['message', 'message_create', 'message_ack'].includes(eventName);
+  const shouldHandleMessage = ['message', 'message_create', 'message_ack'].includes(eventName.toLowerCase());
 
   if (shouldHandleMessage) {
     const unwrapped = unwrapPayload(payload);
