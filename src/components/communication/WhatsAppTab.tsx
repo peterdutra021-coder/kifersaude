@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Search, MessageCircle, Phone, Video, MoreVertical, ArrowLeft } from 'lucide-react';
 import { MessageInput } from './MessageInput';
 import { MessageBubble } from './MessageBubble';
+import { MessageHistoryPanel } from './MessageHistoryPanel';
 
 type WhatsAppChat = {
   id: string;
@@ -27,6 +28,13 @@ type WhatsAppMessage = {
   direction: 'inbound' | 'outbound' | null;
   ack_status: number | null;
   created_at: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  edit_count?: number;
+  edited_at?: string | null;
+  original_body?: string | null;
+  author?: string | null;
 };
 
 export default function WhatsAppTab() {
@@ -328,13 +336,20 @@ export default function WhatsAppTab() {
                       timestamp={message.timestamp}
                       ackStatus={message.ack_status}
                       hasMedia={message.has_media}
-                      fromName={selectedChat?.name || undefined}
+                      fromName={message.author || selectedChat?.name || undefined}
+                      isDeleted={message.is_deleted}
+                      deletedAt={message.deleted_at}
+                      editCount={message.edit_count}
+                      editedAt={message.edited_at}
+                      originalBody={message.original_body}
                       onReply={handleReply}
                     />
                   ))
                 )}
                 <div ref={messagesEndRef} />
               </div>
+
+              <MessageHistoryPanel chatId={selectedChat.id} />
 
               <MessageInput
                 chatId={selectedChat.id}

@@ -20,6 +20,11 @@ type WhapiMessage = {
   timestamp: number;
   source?: string;
   status?: string;
+  edited_at?: number;
+  edit_history?: Array<{
+    body: string;
+    timestamp: number;
+  }>;
   text?: {
     body: string;
   };
@@ -566,12 +571,15 @@ async function upsertMessage(message: NormalizedMessage) {
       to_number: message.toNumber,
       type: message.type,
       body: message.body,
+      original_body: message.body,
       has_media: message.hasMedia,
       timestamp: message.timestamp,
       payload: message.payload,
       direction: message.direction,
       author: message.author,
       ack_status: message.ackStatus,
+      is_deleted: false,
+      edit_count: 0,
     },
     { onConflict: 'id' },
   );
@@ -607,6 +615,104 @@ function getAckLabel(ack: number): string {
     4: 'ouvido',
   };
   return labels[ack] || 'desconhecido';
+}
+
+async function processMessageEdit(message: WhapiMessage, normalized: NormalizedMessage) {
+  console.log('whatsapp-webhook: processando edição de mensagem', {
+    messageId: message.id,
+    chatId: message.chat_id,
+    editedAt: message.edited_at,
+  });
+
+  const { data: existingMessage, error: fetchError } = await supabase
+    .from('whatsapp_messages')
+    .select('body, original_body, edit_count, payload')
+    .eq('id', message.id)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error('whatsapp-webhook: erro ao buscar mensagem existente', fetchError);
+    return;
+  }
+
+  if (!existingMessage) {
+    console.log('whatsapp-webhook: mensagem não existe ainda, salvando como nova');
+    await upsertMessage(normalized);
+    return;
+  }
+
+  const oldBody = existingMessage.body;
+  const newBody = normalized.body;
+  const editCount = (existingMessage.edit_count || 0) + 1;
+  const originalBody = existingMessage.original_body || existingMessage.body;
+
+  const { error: updateError } = await supabase
+    .from('whatsapp_messages')
+    .update({
+      body: newBody,
+      original_body: originalBody,
+      edit_count: editCount,
+      edited_at: message.edited_at ? toIsoString(message.edited_at) : new Date().toISOString(),
+      payload: normalized.payload,
+    })
+    .eq('id', message.id);
+
+  if (updateError) {
+    console.error('whatsapp-webhook: erro ao atualizar mensagem editada', updateError);
+    return;
+  }
+
+  console.log('whatsapp-webhook: mensagem editada com sucesso', {
+    messageId: message.id,
+    editCount,
+    oldBodyLength: oldBody?.length || 0,
+    newBodyLength: newBody?.length || 0,
+  });
+}
+
+async function processMessageDelete(message: WhapiMessage) {
+  console.log('whatsapp-webhook: processando deleção de mensagem', {
+    messageId: message.id,
+    chatId: message.chat_id,
+  });
+
+  const { data: existingMessage, error: fetchError } = await supabase
+    .from('whatsapp_messages')
+    .select('body, payload')
+    .eq('id', message.id)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error('whatsapp-webhook: erro ao buscar mensagem para deletar', fetchError);
+    return;
+  }
+
+  if (!existingMessage) {
+    console.log('whatsapp-webhook: mensagem não encontrada para deleção', { messageId: message.id });
+    return;
+  }
+
+  const deletedBy = message.from_me ? 'outbound_user' : (message.from || 'unknown');
+
+  const { error: updateError } = await supabase
+    .from('whatsapp_messages')
+    .update({
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+      deleted_by: deletedBy,
+      payload: JSON.parse(JSON.stringify(message)),
+    })
+    .eq('id', message.id);
+
+  if (updateError) {
+    console.error('whatsapp-webhook: erro ao marcar mensagem como deletada', updateError);
+    return;
+  }
+
+  console.log('whatsapp-webhook: mensagem marcada como deletada', {
+    messageId: message.id,
+    deletedBy,
+  });
 }
 
 async function processGroupCreation(group: WhapiGroup) {
@@ -895,9 +1001,30 @@ Deno.serve(async (req) => {
   if (isMessageEvent && payload.messages && Array.isArray(payload.messages)) {
     for (const message of payload.messages) {
       try {
-        const normalized = normalizeWhapiMessage(message);
-        await upsertChat(normalized);
-        await upsertMessage(normalized);
+        const isDeleted = message.action?.type === 'delete' || message.type === 'revoked';
+        const isEdited = message.edited_at !== undefined || message.edit_history !== undefined;
+
+        if (isDeleted) {
+          console.log('whatsapp-webhook: mensagem deletada detectada', {
+            messageId: message.id,
+            chatId: message.chat_id,
+          });
+          await processMessageDelete(message);
+        } else {
+          const normalized = normalizeWhapiMessage(message);
+          await upsertChat(normalized);
+
+          if (isEdited) {
+            console.log('whatsapp-webhook: mensagem editada detectada', {
+              messageId: message.id,
+              chatId: message.chat_id,
+              editedAt: message.edited_at,
+            });
+            await processMessageEdit(message, normalized);
+          } else {
+            await upsertMessage(normalized);
+          }
+        }
       } catch (error) {
         const message_error = error instanceof Error ? error.message : 'Erro desconhecido';
         console.error('whatsapp-webhook: erro ao processar mensagem', message_error, { messageId: message.id });

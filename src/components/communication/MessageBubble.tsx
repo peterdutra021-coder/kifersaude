@@ -1,6 +1,8 @@
-import { Check, CheckCheck, Clock, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Check, CheckCheck, Clock, AlertCircle, Edit3, Trash2, History } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { MessageHistoryModal } from './MessageHistoryModal';
 
 interface MessageBubbleProps {
   id: string;
@@ -11,6 +13,11 @@ interface MessageBubbleProps {
   ackStatus: number | null;
   hasMedia: boolean;
   fromName?: string;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
+  editCount?: number;
+  editedAt?: string | null;
+  originalBody?: string | null;
   onReply?: (messageId: string, body: string, from: string) => void;
 }
 
@@ -23,9 +30,16 @@ export function MessageBubble({
   ackStatus,
   hasMedia,
   fromName,
+  isDeleted = false,
+  deletedAt,
+  editCount = 0,
+  editedAt,
+  originalBody,
   onReply,
 }: MessageBubbleProps) {
   const isOutbound = direction === 'outbound';
+  const [showHistory, setShowHistory] = useState(false);
+  const hasHistory = editCount > 0 || isDeleted;
 
   const formatTimestamp = (ts: string | null) => {
     if (!ts) return '';
@@ -79,6 +93,22 @@ export function MessageBubble({
   };
 
   const renderContent = () => {
+    if (isDeleted) {
+      return (
+        <div className="flex items-center gap-2">
+          <Trash2 className="w-4 h-4 text-red-500 flex-shrink-0" />
+          <div className="text-sm italic text-gray-600">
+            <span className="line-through">Mensagem apagada</span>
+            {deletedAt && (
+              <span className="block text-xs mt-1">
+                em {format(new Date(deletedAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     if (type === 'location') {
       return (
         <div className="flex items-center gap-2">
@@ -196,27 +226,60 @@ export function MessageBubble({
 
           {renderContent()}
 
-          <div className="flex items-center justify-end gap-1 mt-1">
-            <span className="text-xs text-gray-500">
-              {formatTimestamp(timestamp)}
-            </span>
-            {isOutbound && (
-              <span title={getAckLabel()}>
-                {getAckIcon()}
+          <div className="flex items-center justify-between gap-2 mt-1">
+            <div className="flex items-center gap-2">
+              {editCount > 0 && !isDeleted && (
+                <div
+                  className="flex items-center gap-1 text-xs text-blue-600 cursor-pointer hover:text-blue-700"
+                  title={`Editada ${editCount} vez${editCount > 1 ? 'es' : ''}`}
+                  onClick={() => setShowHistory(true)}
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Editada</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-500">
+                {formatTimestamp(timestamp)}
               </span>
-            )}
+              {isOutbound && (
+                <span title={getAckLabel()}>
+                  {getAckIcon()}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {onReply && (
-          <button
-            onClick={() => onReply(id, body || '', fromName || 'Contato')}
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 hover:text-gray-700 mt-1 px-2"
-          >
-            Responder
-          </button>
-        )}
+        <div className="flex items-center gap-2 mt-1">
+          {onReply && !isDeleted && (
+            <button
+              onClick={() => onReply(id, body || '', fromName || 'Contato')}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 hover:text-gray-700 px-2"
+            >
+              Responder
+            </button>
+          )}
+
+          {hasHistory && (
+            <button
+              onClick={() => setShowHistory(true)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-blue-600 hover:text-blue-700 px-2 flex items-center gap-1"
+            >
+              <History className="w-3 h-3" />
+              <span>Ver histórico</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      <MessageHistoryModal
+        messageId={id}
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
     </div>
   );
 }
