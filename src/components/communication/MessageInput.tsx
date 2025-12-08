@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Mic, MapPin, Smile, X, Image as ImageIcon, File, StopCircle } from 'lucide-react';
-import { sendWhatsAppMessage, sendTypingState, sendRecordingState, fileToBase64 } from '../../lib/whatsappApiService';
+import { Send, Paperclip, Mic, MapPin, Smile, X, Image as ImageIcon, File, StopCircle, Film } from 'lucide-react';
+import { sendWhatsAppMessage, sendMediaMessage, sendTypingState, sendRecordingState, fileToBase64 } from '../../lib/whatsappApiService';
 
 interface MessageInputProps {
   chatId: string;
@@ -84,16 +84,8 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
         if (onCancelEdit) onCancelEdit();
         if (onMessageSent) onMessageSent();
       } else if (selectedFile) {
-        const base64Data = await fileToBase64(selectedFile);
-
-        await sendWhatsAppMessage({
-          chatId,
-          contentType: 'MessageMedia',
-          content: {
-            mimetype: selectedFile.type,
-            data: base64Data,
-            filename: selectedFile.name,
-          },
+        await sendMediaMessage(chatId, selectedFile, {
+          caption: message.trim() || undefined,
           quotedMessageId: replyToMessage?.id,
         });
 
@@ -165,16 +157,32 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
 
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
-        const audioFile = new File([audioBlob], 'audio.ogg', { type: 'audio/ogg' });
+        const audioFile = new File([audioBlob], 'voice.ogg', { type: 'audio/ogg' });
 
-        setSelectedFile(audioFile);
         setIsRecording(false);
+        const recordedTime = recordingTime;
         setRecordingTime(0);
 
         stream.getTracks().forEach(track => track.stop());
 
         if (recordingIntervalRef.current) {
           clearInterval(recordingIntervalRef.current);
+        }
+
+        try {
+          setIsSending(true);
+          await sendMediaMessage(chatId, audioFile, {
+            asVoice: true,
+            quotedMessageId: replyToMessage?.id,
+          });
+
+          if (onCancelReply) onCancelReply();
+          if (onMessageSent) onMessageSent();
+        } catch (error) {
+          console.error('Erro ao enviar áudio:', error);
+          alert('Erro ao enviar mensagem de voz');
+        } finally {
+          setIsSending(false);
         }
       };
 
@@ -280,11 +288,19 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
         <div className="px-4 py-3 bg-gray-50 border-b">
           <div className="flex items-start gap-3">
             {previewUrl ? (
-              <img
-                src={previewUrl}
-                alt="Preview"
-                className="w-20 h-20 object-cover rounded"
-              />
+              selectedFile.type.startsWith('video/') ? (
+                <video
+                  src={previewUrl}
+                  className="w-20 h-20 object-cover rounded"
+                  muted
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="w-20 h-20 object-cover rounded"
+                />
+              )
             ) : (
               <div className="w-20 h-20 bg-gray-200 rounded flex items-center justify-center">
                 <File className="w-8 h-8 text-gray-400" />
@@ -295,6 +311,11 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
               <div className="text-xs text-gray-500">
                 {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
               </div>
+              {(selectedFile.type.startsWith('image/') || selectedFile.type.startsWith('video/')) && (
+                <div className="text-xs text-blue-600 mt-1">
+                  Digite uma legenda abaixo (opcional)
+                </div>
+              )}
             </div>
             <button
               onClick={clearFile}
@@ -388,7 +409,7 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
               handleTyping();
             }}
             onKeyPress={handleKeyPress}
-            placeholder="Digite uma mensagem"
+            placeholder={selectedFile ? "Digite uma legenda (opcional)" : "Digite uma mensagem"}
             className="flex-1 px-2 py-2 resize-none focus:outline-none max-h-32 min-h-[40px]"
             rows={1}
             disabled={isSending || isRecording}
