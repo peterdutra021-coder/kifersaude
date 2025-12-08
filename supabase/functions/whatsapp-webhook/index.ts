@@ -302,6 +302,8 @@ function normalizeWhapiMessage(message: WhapiMessage): NormalizedMessage {
       body = '[Mensagem apagada]';
     } else if (message.action.type === 'vote') {
       body = '[Votou em enquete]';
+    } else if (message.action.type === 'edit') {
+      body = message.text?.body || '';
     } else {
       body = `[Ação: ${message.action.type}]`;
     }
@@ -1002,7 +1004,7 @@ Deno.serve(async (req) => {
     for (const message of payload.messages) {
       try {
         const isDeleted = message.action?.type === 'delete' || message.type === 'revoked';
-        const isEdited = message.edited_at !== undefined || message.edit_history !== undefined;
+        const isEdited = message.action?.type === 'edit' || message.edited_at !== undefined || message.edit_history !== undefined;
 
         if (isDeleted) {
           console.log('whatsapp-webhook: mensagem deletada detectada', {
@@ -1010,20 +1012,21 @@ Deno.serve(async (req) => {
             chatId: message.chat_id,
           });
           await processMessageDelete(message);
+        } else if (isEdited) {
+          console.log('whatsapp-webhook: mensagem editada detectada', {
+            messageId: message.id,
+            chatId: message.chat_id,
+            editedAt: message.edited_at,
+            actionType: message.action?.type,
+          });
+
+          const normalized = normalizeWhapiMessage(message);
+          await upsertChat(normalized);
+          await processMessageEdit(message, normalized);
         } else {
           const normalized = normalizeWhapiMessage(message);
           await upsertChat(normalized);
-
-          if (isEdited) {
-            console.log('whatsapp-webhook: mensagem editada detectada', {
-              messageId: message.id,
-              chatId: message.chat_id,
-              editedAt: message.edited_at,
-            });
-            await processMessageEdit(message, normalized);
-          } else {
-            await upsertMessage(normalized);
-          }
+          await upsertMessage(normalized);
         }
       } catch (error) {
         const message_error = error instanceof Error ? error.message : 'Erro desconhecido';
