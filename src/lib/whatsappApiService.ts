@@ -40,6 +40,7 @@ export interface SendMessageParams {
     contactId?: string;
   };
   quotedMessageId?: string;
+  editMessageId?: string;
 }
 
 export async function sendWhatsAppMessage(params: SendMessageParams) {
@@ -52,6 +53,10 @@ export async function sendWhatsAppMessage(params: SendMessageParams) {
 
   if (params.quotedMessageId) {
     body.quoted = params.quotedMessageId;
+  }
+
+  if (params.editMessageId) {
+    body.edit = params.editMessageId;
   }
 
   if (params.contentType === 'string') {

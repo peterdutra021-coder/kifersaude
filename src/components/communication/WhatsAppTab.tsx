@@ -49,6 +49,10 @@ export default function WhatsAppTab() {
     body: string;
     from: string;
   } | null>(null);
+  const [editMessage, setEditMessage] = useState<{
+    id: string;
+    body: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -176,11 +180,21 @@ export default function WhatsAppTab() {
   };
 
   const handleReply = (messageId: string, body: string, from: string) => {
+    setEditMessage(null);
     setReplyToMessage({ id: messageId, body, from });
   };
 
   const handleCancelReply = () => {
     setReplyToMessage(null);
+  };
+
+  const handleEdit = (messageId: string, body: string) => {
+    setReplyToMessage(null);
+    setEditMessage({ id: messageId, body });
+  };
+
+  const handleCancelEdit = () => {
+    setEditMessage(null);
   };
 
   const handleMessageSent = () => {
@@ -343,6 +357,7 @@ export default function WhatsAppTab() {
                       editedAt={message.edited_at}
                       originalBody={message.original_body}
                       onReply={handleReply}
+                      onEdit={handleEdit}
                     />
                   ))
                 )}
@@ -356,6 +371,8 @@ export default function WhatsAppTab() {
                 onMessageSent={handleMessageSent}
                 replyToMessage={replyToMessage}
                 onCancelReply={handleCancelReply}
+                editMessage={editMessage}
+                onCancelEdit={handleCancelEdit}
               />
             </>
           ) : (

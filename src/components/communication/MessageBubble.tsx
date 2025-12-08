@@ -19,6 +19,7 @@ interface MessageBubbleProps {
   editedAt?: string | null;
   originalBody?: string | null;
   onReply?: (messageId: string, body: string, from: string) => void;
+  onEdit?: (messageId: string, body: string) => void;
 }
 
 export function MessageBubble({
@@ -36,6 +37,7 @@ export function MessageBubble({
   editedAt,
   originalBody,
   onReply,
+  onEdit,
 }: MessageBubbleProps) {
   const isOutbound = direction === 'outbound';
   const [showHistory, setShowHistory] = useState(false);
@@ -260,6 +262,16 @@ export function MessageBubble({
               className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 hover:text-gray-700 px-2"
             >
               Responder
+            </button>
+          )}
+
+          {onEdit && isOutbound && !isDeleted && !hasMedia && (
+            <button
+              onClick={() => onEdit(id, body || '')}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 hover:text-gray-700 px-2 flex items-center gap-1"
+            >
+              <Edit3 className="w-3 h-3" />
+              <span>Editar</span>
             </button>
           )}
 

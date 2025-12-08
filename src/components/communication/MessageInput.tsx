@@ -11,9 +11,14 @@ interface MessageInputProps {
     from: string;
   } | null;
   onCancelReply?: () => void;
+  editMessage?: {
+    id: string;
+    body: string;
+  } | null;
+  onCancelEdit?: () => void;
 }
 
-export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelReply }: MessageInputProps) {
+export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelReply, editMessage, onCancelEdit }: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -28,6 +33,12 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
   const audioChunksRef = useRef<Blob[]>([]);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (editMessage) {
+      setMessage(editMessage.body);
+    }
+  }, [editMessage]);
 
   useEffect(() => {
     return () => {
@@ -61,7 +72,18 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
     setIsSending(true);
 
     try {
-      if (selectedFile) {
+      if (editMessage) {
+        await sendWhatsAppMessage({
+          chatId,
+          contentType: 'string',
+          content: message.trim(),
+          editMessageId: editMessage.id,
+        });
+
+        setMessage('');
+        if (onCancelEdit) onCancelEdit();
+        if (onMessageSent) onMessageSent();
+      } else if (selectedFile) {
         const base64Data = await fileToBase64(selectedFile);
 
         await sendWhatsAppMessage({
@@ -76,6 +98,9 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
         });
 
         clearFile();
+        setMessage('');
+        if (onCancelReply) onCancelReply();
+        if (onMessageSent) onMessageSent();
       } else if (message.trim()) {
         await sendWhatsAppMessage({
           chatId,
@@ -83,11 +108,11 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
           content: message.trim(),
           quotedMessageId: replyToMessage?.id,
         });
-      }
 
-      setMessage('');
-      if (onCancelReply) onCancelReply();
-      if (onMessageSent) onMessageSent();
+        setMessage('');
+        if (onCancelReply) onCancelReply();
+        if (onMessageSent) onMessageSent();
+      }
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       alert('Erro ao enviar mensagem');
@@ -221,7 +246,22 @@ export function MessageInput({ chatId, onMessageSent, replyToMessage, onCancelRe
 
   return (
     <div className="border-t bg-white">
-      {replyToMessage && (
+      {editMessage && (
+        <div className="px-4 py-2 bg-blue-50 border-b flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-blue-600">Editando mensagem</div>
+            <div className="text-sm text-gray-600 truncate">{editMessage.body}</div>
+          </div>
+          <button
+            onClick={onCancelEdit}
+            className="ml-2 p-1 hover:bg-blue-100 rounded"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {replyToMessage && !editMessage && (
         <div className="px-4 py-2 bg-gray-50 border-b flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-green-600">Respondendo a {replyToMessage.from}</div>
