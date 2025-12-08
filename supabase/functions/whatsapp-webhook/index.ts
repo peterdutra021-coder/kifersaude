@@ -463,10 +463,6 @@ async function resolveChatName(message: NormalizedMessage): Promise<string> {
     return leadName;
   }
 
-  if (message.direction === 'inbound' && message.contactName) {
-    return message.contactName;
-  }
-
   const { data: existingChat } = await supabase
     .from('whatsapp_chats')
     .select('name')
@@ -477,7 +473,11 @@ async function resolveChatName(message: NormalizedMessage): Promise<string> {
     return existingChat.name;
   }
 
-  return message.contactName ?? message.chatId;
+  if (message.direction === 'inbound' && message.contactName) {
+    return message.contactName;
+  }
+
+  return phoneNumber;
 }
 
 async function upsertChat(message: NormalizedMessage) {
