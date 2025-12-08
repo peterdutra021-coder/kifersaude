@@ -19,6 +19,7 @@ type WhapiMessage = {
   chat_id: string;
   timestamp: number;
   source?: string;
+  status?: string;
   text?: {
     body: string;
   };
@@ -27,38 +28,114 @@ type WhapiMessage = {
   image?: {
     mime_type: string;
     file_size: number;
-    link: string;
+    link?: string;
+    caption?: string;
   };
   video?: {
     mime_type: string;
     file_size: number;
-    link: string;
+    link?: string;
+    caption?: string;
   };
   audio?: {
     mime_type: string;
     file_size: number;
-    link: string;
+    link?: string;
   };
   voice?: {
     mime_type: string;
     file_size: number;
-    link: string;
+    link?: string;
   };
   document?: {
     mime_type: string;
     file_size: number;
-    link: string;
+    link?: string;
     filename?: string;
+    caption?: string;
   };
   location?: {
     latitude: number;
     longitude: number;
     address?: string;
   };
+  live_location?: {
+    latitude: number;
+    longitude: number;
+    caption?: string;
+  };
+  contact?: {
+    name: string;
+    vcard: string;
+  };
+  contact_list?: {
+    list: Array<{
+      name: string;
+      vcard: string;
+    }>;
+  };
+  link_preview?: {
+    body: string;
+    url: string;
+    title?: string;
+    description?: string;
+  };
+  sticker?: {
+    mime_type: string;
+    link?: string;
+    animated?: boolean;
+  };
+  action?: {
+    target: string;
+    type: string;
+    emoji?: string;
+    votes?: string[];
+  };
+  context?: {
+    quoted_id?: string;
+    quoted_author?: string;
+    quoted_type?: string;
+    quoted_content?: Record<string, unknown>;
+  };
+  reply?: {
+    type: string;
+    buttons_reply?: {
+      id: string;
+      title: string;
+    };
+  };
+  group_invite?: {
+    body: string;
+    url: string;
+    invite_code: string;
+  };
+  poll?: {
+    title: string;
+    options: string[];
+    total: number;
+  };
+  product?: {
+    product_id: string;
+    catalog_id: string;
+  };
+  order?: {
+    order_id: string;
+    status: string;
+    item_count: number;
+  };
+};
+
+type WhapiStatus = {
+  id: string;
+  code: number;
+  status: string;
+  recipient_id: string;
+  timestamp: string;
 };
 
 type WhapiWebhook = {
   messages?: WhapiMessage[];
+  statuses?: WhapiStatus[];
   event: {
     type: string;
     event: string;
@@ -145,11 +222,14 @@ function normalizeWhapiMessage(message: WhapiMessage): NormalizedMessage {
 
   if (message.text?.body) {
     body = message.text.body;
+  } else if (message.link_preview) {
+    body = message.link_preview.body;
+    hasMedia = true;
   } else if (message.image) {
-    body = '[Imagem]';
+    body = message.image.caption || '[Imagem]';
     hasMedia = true;
   } else if (message.video) {
-    body = '[Vídeo]';
+    body = message.video.caption || '[Vídeo]';
     hasMedia = true;
   } else if (message.audio) {
     body = '[Áudio]';
@@ -158,17 +238,54 @@ function normalizeWhapiMessage(message: WhapiMessage): NormalizedMessage {
     body = '[Mensagem de voz]';
     hasMedia = true;
   } else if (message.document) {
-    body = `[Documento${message.document.filename ? ': ' + message.document.filename : ''}]`;
+    const fileName = message.document.filename || '';
+    const caption = message.document.caption;
+    body = caption ? `${caption} [Documento: ${fileName}]` : `[Documento${fileName ? ': ' + fileName : ''}]`;
     hasMedia = true;
   } else if (message.location) {
-    body = '[Localização]';
+    body = `[Localização${message.location.address ? ': ' + message.location.address : ''}]`;
     hasMedia = true;
+  } else if (message.live_location) {
+    body = `[Localização ao vivo${message.live_location.caption ? ': ' + message.live_location.caption : ''}]`;
+    hasMedia = true;
+  } else if (message.contact) {
+    body = `[Contato: ${message.contact.name}]`;
+  } else if (message.contact_list) {
+    const count = message.contact_list.list.length;
+    body = `[${count} contato${count > 1 ? 's' : ''}]`;
+  } else if (message.sticker) {
+    body = message.sticker.animated ? '[Sticker animado]' : '[Sticker]';
+    hasMedia = true;
+  } else if (message.action) {
+    if (message.action.type === 'reaction') {
+      body = `Reagiu com ${message.action.emoji || ''}`;
+    } else if (message.action.type === 'delete') {
+      body = '[Mensagem apagada]';
+    } else if (message.action.type === 'vote') {
+      body = '[Votou em enquete]';
+    } else {
+      body = `[Ação: ${message.action.type}]`;
+    }
+  } else if (message.reply?.buttons_reply) {
+    body = `Resposta: ${message.reply.buttons_reply.title}`;
+  } else if (message.group_invite) {
+    body = `[Convite para grupo: ${message.group_invite.url}]`;
+  } else if (message.poll) {
+    body = `[Enquete: ${message.poll.title}]`;
+  } else if (message.product) {
+    body = '[Produto do catálogo]';
+  } else if (message.order) {
+    body = `[Pedido #${message.order.order_id}]`;
+  } else {
+    body = `[${message.type}]`;
   }
 
   const fromNumber = direction === 'inbound' ? (message.from || chatId) : null;
   const toNumber = direction === 'outbound' ? chatId : null;
   const contactName = message.from_name || null;
   const timestamp = toIsoString(message.timestamp);
+
+  const ackStatus = message.status ? mapStatusToAck(message.status) : null;
 
   const normalized: NormalizedMessage = {
     chatId,
@@ -183,7 +300,7 @@ function normalizeWhapiMessage(message: WhapiMessage): NormalizedMessage {
     contactName,
     isGroup,
     author: isGroup && fromNumber ? fromNumber : null,
-    ackStatus: null,
+    ackStatus,
     payload: JSON.parse(JSON.stringify(message)),
   };
 
@@ -197,6 +314,18 @@ function normalizeWhapiMessage(message: WhapiMessage): NormalizedMessage {
   });
 
   return normalized;
+}
+
+function mapStatusToAck(status: string): number {
+  const statusMap: Record<string, number> = {
+    'failed': 0,
+    'pending': 1,
+    'sent': 2,
+    'delivered': 3,
+    'read': 4,
+    'played': 4,
+  };
+  return statusMap[status] ?? 1;
 }
 
 function extractPhoneNumber(chatId: string): string {
@@ -483,6 +612,7 @@ Deno.serve(async (req) => {
   }
 
   const isMessageEvent = eventName.toLowerCase().includes('messages');
+  const isStatusEvent = eventName.toLowerCase().includes('statuses');
 
   if (isMessageEvent && payload.messages && Array.isArray(payload.messages)) {
     for (const message of payload.messages) {
@@ -497,5 +627,23 @@ Deno.serve(async (req) => {
     }
   }
 
-  return respond({ success: true, event: eventName, processed: payload.messages?.length || 0 });
+  if (isStatusEvent && payload.statuses && Array.isArray(payload.statuses)) {
+    for (const status of payload.statuses) {
+      try {
+        const ackStatus = status.code;
+        await updateMessageAck(status.id, ackStatus);
+        console.log('whatsapp-webhook: status de mensagem atualizado', {
+          messageId: status.id,
+          status: status.status,
+          ackStatus,
+        });
+      } catch (error) {
+        const status_error = error instanceof Error ? error.message : 'Erro desconhecido';
+        console.error('whatsapp-webhook: erro ao processar status', status_error, { statusId: status.id });
+      }
+    }
+  }
+
+  const processed = (payload.messages?.length || 0) + (payload.statuses?.length || 0);
+  return respond({ success: true, event: eventName, processed });
 });
