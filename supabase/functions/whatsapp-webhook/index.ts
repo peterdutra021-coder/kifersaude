@@ -133,9 +133,43 @@ type WhapiStatus = {
   timestamp: string;
 };
 
+type WhapiParticipant = {
+  id: string;
+  rank: 'creator' | 'admin' | 'member';
+};
+
+type WhapiGroup = {
+  id: string;
+  name: string;
+  type: string;
+  timestamp?: number;
+  participants: WhapiParticipant[];
+  name_at?: number;
+  created_at: number;
+  created_by: string;
+  chat_pic?: string;
+  chat_pic_full?: string;
+  adminAddMemberMode?: boolean;
+};
+
+type WhapiGroupParticipants = {
+  group_id: string;
+  participants: string[];
+  action: 'add' | 'remove' | 'promote' | 'demote' | 'request';
+};
+
+type WhapiGroupUpdate = {
+  before_update: WhapiGroup;
+  after_update: WhapiGroup;
+  changes: string[];
+};
+
 type WhapiWebhook = {
   messages?: WhapiMessage[];
   statuses?: WhapiStatus[];
+  groups?: WhapiGroup[];
+  groups_participants?: WhapiGroupParticipants[];
+  groups_updates?: WhapiGroupUpdate[];
   event: {
     type: string;
     event: string;
@@ -575,6 +609,249 @@ function getAckLabel(ack: number): string {
   return labels[ack] || 'desconhecido';
 }
 
+async function processGroupCreation(group: WhapiGroup) {
+  console.log('whatsapp-webhook: processando criação de grupo', {
+    groupId: group.id,
+    groupName: group.name,
+    participantsCount: group.participants.length,
+  });
+
+  const { error: groupError } = await supabase.from('whatsapp_groups').upsert(
+    {
+      id: group.id,
+      name: group.name,
+      type: group.type,
+      chat_pic: group.chat_pic || null,
+      chat_pic_full: group.chat_pic_full || null,
+      created_at: toIsoString(group.created_at),
+      created_by: group.created_by,
+      name_at: group.name_at ? toIsoString(group.name_at) : null,
+      admin_add_member_mode: group.adminAddMemberMode ?? true,
+      first_seen_at: new Date().toISOString(),
+      last_updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' },
+  );
+
+  if (groupError) {
+    throw new Error(`Erro ao salvar grupo: ${groupError.message}`);
+  }
+
+  for (const participant of group.participants) {
+    const { error: participantError } = await supabase.from('whatsapp_group_participants').upsert(
+      {
+        group_id: group.id,
+        phone: participant.id,
+        rank: participant.rank,
+        joined_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'group_id,phone' },
+    );
+
+    if (participantError) {
+      console.error('whatsapp-webhook: erro ao salvar participante', {
+        groupId: group.id,
+        phone: participant.id,
+        error: participantError.message,
+      });
+    }
+  }
+
+  const { error: eventError } = await supabase.from('whatsapp_group_events').insert({
+    group_id: group.id,
+    event_type: 'created',
+    participants: group.participants.map((p) => p.id),
+    triggered_by: group.created_by,
+    occurred_at: toIsoString(group.created_at),
+    created_at: new Date().toISOString(),
+  });
+
+  if (eventError) {
+    console.error('whatsapp-webhook: erro ao salvar evento de criação do grupo', eventError.message);
+  }
+
+  await supabase.from('whatsapp_chats').upsert(
+    {
+      id: group.id,
+      name: group.name,
+      is_group: true,
+      phone_number: null,
+      lid: null,
+      last_message_at: toIsoString(group.created_at),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' },
+  );
+}
+
+async function processGroupParticipantChange(change: WhapiGroupParticipants) {
+  console.log('whatsapp-webhook: processando mudança de participantes', {
+    groupId: change.group_id,
+    action: change.action,
+    participantsCount: change.participants.length,
+  });
+
+  const eventTypeMap: Record<string, string> = {
+    add: 'participant_added',
+    remove: 'participant_removed',
+    promote: 'participant_promoted',
+    demote: 'participant_demoted',
+    request: 'join_request',
+  };
+
+  const eventType = eventTypeMap[change.action] || change.action;
+
+  if (change.action === 'add') {
+    for (const phone of change.participants) {
+      const { error } = await supabase.from('whatsapp_group_participants').upsert(
+        {
+          group_id: change.group_id,
+          phone,
+          rank: 'member',
+          joined_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'group_id,phone' },
+      );
+
+      if (error) {
+        console.error('whatsapp-webhook: erro ao adicionar participante', {
+          groupId: change.group_id,
+          phone,
+          error: error.message,
+        });
+      }
+    }
+  } else if (change.action === 'remove') {
+    for (const phone of change.participants) {
+      const { error } = await supabase
+        .from('whatsapp_group_participants')
+        .delete()
+        .eq('group_id', change.group_id)
+        .eq('phone', phone);
+
+      if (error) {
+        console.error('whatsapp-webhook: erro ao remover participante', {
+          groupId: change.group_id,
+          phone,
+          error: error.message,
+        });
+      }
+    }
+  } else if (change.action === 'promote') {
+    for (const phone of change.participants) {
+      const { error } = await supabase
+        .from('whatsapp_group_participants')
+        .update({ rank: 'admin', updated_at: new Date().toISOString() })
+        .eq('group_id', change.group_id)
+        .eq('phone', phone);
+
+      if (error) {
+        console.error('whatsapp-webhook: erro ao promover participante', {
+          groupId: change.group_id,
+          phone,
+          error: error.message,
+        });
+      }
+    }
+  } else if (change.action === 'demote') {
+    for (const phone of change.participants) {
+      const { error } = await supabase
+        .from('whatsapp_group_participants')
+        .update({ rank: 'member', updated_at: new Date().toISOString() })
+        .eq('group_id', change.group_id)
+        .eq('phone', phone);
+
+      if (error) {
+        console.error('whatsapp-webhook: erro ao rebaixar participante', {
+          groupId: change.group_id,
+          phone,
+          error: error.message,
+        });
+      }
+    }
+  }
+
+  const { error: eventError } = await supabase.from('whatsapp_group_events').insert({
+    group_id: change.group_id,
+    event_type: eventType,
+    participants: change.participants,
+    occurred_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+  });
+
+  if (eventError) {
+    console.error('whatsapp-webhook: erro ao salvar evento de participante', eventError.message);
+  }
+}
+
+async function processGroupUpdate(update: WhapiGroupUpdate) {
+  console.log('whatsapp-webhook: processando atualização de grupo', {
+    groupId: update.after_update.id,
+    changes: update.changes,
+  });
+
+  const updateData: Record<string, unknown> = {
+    last_updated_at: new Date().toISOString(),
+  };
+
+  let eventType: string | null = null;
+  let oldValue: string | null = null;
+  let newValue: string | null = null;
+
+  for (const change of update.changes) {
+    if (change === 'name') {
+      updateData.name = update.after_update.name;
+      updateData.name_at = update.after_update.name_at
+        ? toIsoString(update.after_update.name_at)
+        : new Date().toISOString();
+      eventType = 'name_changed';
+      oldValue = update.before_update.name;
+      newValue = update.after_update.name;
+    } else if (change === 'chat_pic' || change === 'chat_pic_full') {
+      updateData.chat_pic = update.after_update.chat_pic || null;
+      updateData.chat_pic_full = update.after_update.chat_pic_full || null;
+      if (!eventType) {
+        eventType = 'picture_changed';
+        oldValue = update.before_update.chat_pic || 'sem foto';
+        newValue = update.after_update.chat_pic || 'sem foto';
+      }
+    }
+  }
+
+  const { error: groupError } = await supabase
+    .from('whatsapp_groups')
+    .update(updateData)
+    .eq('id', update.after_update.id);
+
+  if (groupError) {
+    throw new Error(`Erro ao atualizar grupo: ${groupError.message}`);
+  }
+
+  if (eventType && updateData.name) {
+    await supabase
+      .from('whatsapp_chats')
+      .update({ name: updateData.name, updated_at: new Date().toISOString() })
+      .eq('id', update.after_update.id);
+  }
+
+  if (eventType) {
+    const { error: eventError } = await supabase.from('whatsapp_group_events').insert({
+      group_id: update.after_update.id,
+      event_type: eventType,
+      old_value: oldValue,
+      new_value: newValue,
+      occurred_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    });
+
+    if (eventError) {
+      console.error('whatsapp-webhook: erro ao salvar evento de atualização do grupo', eventError.message);
+    }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -613,6 +890,7 @@ Deno.serve(async (req) => {
 
   const isMessageEvent = eventName.toLowerCase().includes('messages');
   const isStatusEvent = eventName.toLowerCase().includes('statuses');
+  const isGroupEvent = eventName.toLowerCase().includes('groups');
 
   if (isMessageEvent && payload.messages && Array.isArray(payload.messages)) {
     for (const message of payload.messages) {
@@ -644,6 +922,63 @@ Deno.serve(async (req) => {
     }
   }
 
-  const processed = (payload.messages?.length || 0) + (payload.statuses?.length || 0);
+  if (isGroupEvent) {
+    if (payload.groups && Array.isArray(payload.groups)) {
+      for (const group of payload.groups) {
+        try {
+          await processGroupCreation(group);
+          console.log('whatsapp-webhook: grupo criado/atualizado', {
+            groupId: group.id,
+            groupName: group.name,
+          });
+        } catch (error) {
+          const group_error = error instanceof Error ? error.message : 'Erro desconhecido';
+          console.error('whatsapp-webhook: erro ao processar grupo', group_error, { groupId: group.id });
+        }
+      }
+    }
+
+    if (payload.groups_participants && Array.isArray(payload.groups_participants)) {
+      for (const change of payload.groups_participants) {
+        try {
+          await processGroupParticipantChange(change);
+          console.log('whatsapp-webhook: participantes do grupo atualizados', {
+            groupId: change.group_id,
+            action: change.action,
+            participants: change.participants,
+          });
+        } catch (error) {
+          const participant_error = error instanceof Error ? error.message : 'Erro desconhecido';
+          console.error('whatsapp-webhook: erro ao processar participantes', participant_error, {
+            groupId: change.group_id,
+          });
+        }
+      }
+    }
+
+    if (payload.groups_updates && Array.isArray(payload.groups_updates)) {
+      for (const update of payload.groups_updates) {
+        try {
+          await processGroupUpdate(update);
+          console.log('whatsapp-webhook: grupo atualizado', {
+            groupId: update.after_update.id,
+            changes: update.changes,
+          });
+        } catch (error) {
+          const update_error = error instanceof Error ? error.message : 'Erro desconhecido';
+          console.error('whatsapp-webhook: erro ao processar atualização de grupo', update_error, {
+            groupId: update.after_update.id,
+          });
+        }
+      }
+    }
+  }
+
+  const processed =
+    (payload.messages?.length || 0) +
+    (payload.statuses?.length || 0) +
+    (payload.groups?.length || 0) +
+    (payload.groups_participants?.length || 0) +
+    (payload.groups_updates?.length || 0);
   return respond({ success: true, event: eventName, processed });
 });
