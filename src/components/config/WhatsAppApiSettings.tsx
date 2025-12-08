@@ -32,9 +32,7 @@ export default function WhatsAppApiSettings() {
   const [showApiKey, setShowApiKey] = useState(false);
 
   const [enabled, setEnabled] = useState(false);
-  const [baseUrl, setBaseUrl] = useState('');
-  const [sessionId, setSessionId] = useState('');
-  const [apiKey, setApiKey] = useState('');
+  const [token, setToken] = useState('');
   const [statusOnSend, setStatusOnSend] = useState('');
 
   const loadSettings = useCallback(async () => {
@@ -53,9 +51,7 @@ export default function WhatsAppApiSettings() {
       setAutoContactSettings(normalized);
 
       setEnabled(normalized.enabled);
-      setBaseUrl(normalized.baseUrl);
-      setSessionId(normalized.sessionId);
-      setApiKey(normalized.apiKey);
+      setToken((normalized as any).token || '');
 
       const validStatusNames = leadStatuses.map(s => s.nome);
       const isValidStatus = normalized.statusOnSend && validStatusNames.includes(normalized.statusOnSend);
@@ -92,9 +88,7 @@ export default function WhatsAppApiSettings() {
 
     const newSettings = {
       enabled,
-      baseUrl: baseUrl.trim(),
-      sessionId: sessionId.trim(),
-      apiKey: apiKey.trim(),
+      token: token.trim(),
       statusOnSend: statusOnSend,
       messageFlow: currentMessageFlow,
     };
@@ -112,9 +106,7 @@ export default function WhatsAppApiSettings() {
       setAutoContactIntegration(updatedIntegration);
       setAutoContactSettings(normalized);
       setEnabled(normalized.enabled);
-      setBaseUrl(normalized.baseUrl);
-      setSessionId(normalized.sessionId);
-      setApiKey(normalized.apiKey);
+      setToken((normalized as any).token || '');
 
       const validStatusNames = leadStatuses.map(s => s.nome);
       const isValidStatus = normalized.statusOnSend && validStatusNames.includes(normalized.statusOnSend);
@@ -169,50 +161,38 @@ export default function WhatsAppApiSettings() {
       <div className="space-y-6">
         <div className="flex items-center gap-2 text-slate-900 font-medium">
           <Settings className="w-5 h-5" />
-          Configurações da API do WhatsApp
+          Configurações da API Whapi Cloud
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
-              <Link className="w-4 h-4 text-slate-400" />
-              URL da API
-            </label>
-            <input
-              type="text"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-              placeholder="https://api.exemplo.com"
-            />
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="space-y-2 text-sm text-blue-900">
+              <p className="font-semibold">Como obter seu token da Whapi Cloud:</p>
+              <ol className="list-decimal list-inside space-y-1 ml-2">
+                <li>Acesse <a href="https://whapi.cloud" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-700">whapi.cloud</a> e crie uma conta</li>
+                <li>Após o login, vá para o painel de controle</li>
+                <li>Configure um canal conectando seu WhatsApp</li>
+                <li>Copie o token de autenticação do seu canal</li>
+                <li>Cole o token no campo abaixo</li>
+              </ol>
+            </div>
           </div>
+        </div>
 
+        <div className="grid grid-cols-1 gap-4">
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
               <Key className="w-4 h-4 text-slate-400" />
-              Session ID
-            </label>
-            <input
-              type="text"
-              value={sessionId}
-              onChange={(e) => setSessionId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-              placeholder="seu-session-id"
-            />
-          </div>
-
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
-              <Key className="w-4 h-4 text-slate-400" />
-              API Key
+              Token da Whapi Cloud
             </label>
             <div className="relative">
               <input
                 type={showApiKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
-                placeholder="sua-api-key"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm font-mono"
+                placeholder="Bearer token da Whapi Cloud"
               />
               <button
                 type="button"
@@ -222,6 +202,9 @@ export default function WhatsAppApiSettings() {
                 {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Este token será usado para autenticação com a API da Whapi Cloud
+            </p>
           </div>
 
           <div>

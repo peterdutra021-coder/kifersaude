@@ -1,11 +1,11 @@
 import { supabase } from './supabase';
 
 interface WhatsAppSettings {
-  baseUrl: string;
-  apiKey: string;
-  sessionId: string;
+  token: string;
   enabled?: boolean;
 }
+
+const WHAPI_BASE_URL = 'https://gate.whapi.cloud';
 
 async function getWhatsAppSettings(): Promise<WhatsAppSettings> {
   const { data, error } = await supabase
@@ -20,8 +20,8 @@ async function getWhatsAppSettings(): Promise<WhatsAppSettings> {
 
   const settings = data.settings as WhatsAppSettings;
 
-  if (!settings.baseUrl || !settings.apiKey || !settings.sessionId) {
-    throw new Error('WhatsApp API não configurado completamente. Verifique as configurações em Automação do WhatsApp.');
+  if (!settings.token) {
+    throw new Error('Token da Whapi Cloud não configurado. Verifique as configurações em Automação do WhatsApp.');
   }
 
   return settings;
@@ -45,32 +45,66 @@ export interface SendMessageParams {
 export async function sendWhatsAppMessage(params: SendMessageParams) {
   const settings = await getWhatsAppSettings();
 
-  const options: Record<string, unknown> = {};
+  let endpoint = '';
+  let body: Record<string, unknown> = {
+    to: params.chatId,
+  };
 
   if (params.quotedMessageId) {
-    options.quotedMessageId = params.quotedMessageId;
+    body.quoted = params.quotedMessageId;
   }
 
-  const response = await fetch(
-    `${settings.baseUrl}/client/sendMessage/${settings.sessionId}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': settings.apiKey,
-      },
-      body: JSON.stringify({
-        chatId: params.chatId,
-        contentType: params.contentType,
-        content: params.content,
-        options: Object.keys(options).length > 0 ? options : undefined,
-      }),
+  if (params.contentType === 'string') {
+    endpoint = '/messages/text';
+    body.body = params.content as string;
+  } else if (params.contentType === 'MessageMedia' && typeof params.content === 'object') {
+    const media = params.content;
+    if (media.mimetype?.startsWith('image/')) {
+      endpoint = '/messages/image';
+      body.media = `data:${media.mimetype};base64,${media.data}`;
+      if (media.filename) {
+        body.caption = media.filename;
+      }
+    } else if (media.mimetype?.startsWith('video/')) {
+      endpoint = '/messages/video';
+      body.media = `data:${media.mimetype};base64,${media.data}`;
+      if (media.filename) {
+        body.caption = media.filename;
+      }
+    } else if (media.mimetype?.startsWith('audio/')) {
+      endpoint = '/messages/audio';
+      body.media = `data:${media.mimetype};base64,${media.data}`;
+    } else {
+      endpoint = '/messages/document';
+      body.media = `data:${media.mimetype};base64,${media.data}`;
+      if (media.filename) {
+        body.filename = media.filename;
+      }
     }
-  );
+  } else if (params.contentType === 'Location' && typeof params.content === 'object') {
+    endpoint = '/messages/location';
+    body.latitude = params.content.latitude;
+    body.longitude = params.content.longitude;
+    if (params.content.description) {
+      body.address = params.content.description;
+    }
+  } else {
+    throw new Error('Tipo de conteúdo não suportado');
+  }
+
+  const response = await fetch(`${WHAPI_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${settings.token}`,
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Erro ao enviar mensagem');
+    const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+    throw new Error(error.error || error.message || 'Erro ao enviar mensagem');
   }
 
   return response.json();
@@ -79,45 +113,41 @@ export async function sendWhatsAppMessage(params: SendMessageParams) {
 export async function sendTypingState(chatId: string) {
   const settings = await getWhatsAppSettings();
 
-  const response = await fetch(
-    `${settings.baseUrl}/chat/sendStateTyping/${settings.sessionId}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': settings.apiKey,
-      },
-      body: JSON.stringify({ chatId }),
-    }
-  );
+  const response = await fetch(`${WHAPI_BASE_URL}/chats/${chatId}/typing`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${settings.token}`,
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({ typing: true }),
+  });
 
   if (!response.ok) {
-    throw new Error('Erro ao enviar estado de digitação');
+    console.error('Erro ao enviar estado de digitação');
   }
 
-  return response.json();
+  return response.ok;
 }
 
 export async function sendRecordingState(chatId: string) {
   const settings = await getWhatsAppSettings();
 
-  const response = await fetch(
-    `${settings.baseUrl}/chat/sendStateRecording/${settings.sessionId}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': settings.apiKey,
-      },
-      body: JSON.stringify({ chatId }),
-    }
-  );
+  const response = await fetch(`${WHAPI_BASE_URL}/chats/${chatId}/recording`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${settings.token}`,
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({ recording: true }),
+  });
 
   if (!response.ok) {
-    throw new Error('Erro ao enviar estado de gravação');
+    console.error('Erro ao enviar estado de gravação');
   }
 
-  return response.json();
+  return response.ok;
 }
 
 export function fileToBase64(file: File): Promise<string> {

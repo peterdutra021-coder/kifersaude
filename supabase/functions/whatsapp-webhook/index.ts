@@ -3,13 +3,67 @@ import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-API-Key, X-Webhook-Event',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-Whapi-Event',
 };
 
 type StoredEvent = {
   event: string;
   payload: Record<string, unknown>;
   headers: Record<string, string>;
+};
+
+type WhapiMessage = {
+  id: string;
+  from_me: boolean;
+  type: string;
+  chat_id: string;
+  timestamp: number;
+  source?: string;
+  text?: {
+    body: string;
+  };
+  from?: string;
+  from_name?: string;
+  image?: {
+    mime_type: string;
+    file_size: number;
+    link: string;
+  };
+  video?: {
+    mime_type: string;
+    file_size: number;
+    link: string;
+  };
+  audio?: {
+    mime_type: string;
+    file_size: number;
+    link: string;
+  };
+  voice?: {
+    mime_type: string;
+    file_size: number;
+    link: string;
+  };
+  document?: {
+    mime_type: string;
+    file_size: number;
+    link: string;
+    filename?: string;
+  };
+  location?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+  };
+};
+
+type WhapiWebhook = {
+  messages?: WhapiMessage[];
+  event: {
+    type: string;
+    event: string;
+  };
+  channel_id?: string;
 };
 
 type NormalizedMessage = {
@@ -45,32 +99,16 @@ function respond(body: Record<string, unknown>, init?: ResponseInit) {
   });
 }
 
-function normalizeJson(value: unknown): Record<string, unknown> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
-function extractEventName(payload: any, headers: Headers, url: URL): string {
-  const headerEvent = headers.get('x-webhook-event') || headers.get('x-whatsapp-event');
+function extractEventName(payload: WhapiWebhook, headers: Headers): string {
+  const headerEvent = headers.get('x-whapi-event');
   if (headerEvent && headerEvent.trim()) {
     return headerEvent.trim();
   }
 
-  const queryEvent = url.searchParams.get('event');
-  if (queryEvent && queryEvent.trim()) {
-    return queryEvent.trim();
-  }
-
-  const bodyEvent =
-    (typeof payload?.dataType === 'string' && payload.dataType) ||
-    (typeof payload?.event === 'string' && payload.event) ||
-    (typeof payload?.type === 'string' && payload.type) ||
-    (typeof payload?.status === 'string' && payload.status);
-
-  if (bodyEvent && bodyEvent.trim()) {
-    return bodyEvent.trim();
+  if (payload.event && typeof payload.event === 'object') {
+    const eventType = payload.event.type || '';
+    const eventAction = payload.event.event || '';
+    return `${eventType}.${eventAction}`.trim();
   }
 
   return 'unknown';
@@ -92,237 +130,70 @@ async function storeEvent(event: StoredEvent) {
   }
 }
 
-function toIsoString(timestamp: unknown): string | null {
-  if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) {
-    return null;
-  }
-
+function toIsoString(timestamp: number): string {
   return new Date(timestamp * 1000).toISOString();
 }
 
-function normalizePayload(value: Record<string, unknown>): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(value));
-}
+function normalizeWhapiMessage(message: WhapiMessage): NormalizedMessage {
+  const messageId = message.id;
+  const direction: 'inbound' | 'outbound' = message.from_me ? 'outbound' : 'inbound';
+  const chatId = message.chat_id;
+  const isGroup = chatId.endsWith('@g.us');
 
-function unwrapPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  if (payload.data && typeof payload.data === 'object') {
-    const dataWrapper = payload.data as Record<string, unknown>;
+  let body = '';
+  let hasMedia = false;
 
-    if (dataWrapper.message && typeof dataWrapper.message === 'object') {
-      const messageData = dataWrapper.message as Record<string, unknown>;
-      const unwrapped = { ...messageData };
-
-      const _data = normalizeJson(messageData._data);
-      if (Object.keys(_data).length > 0) {
-        unwrapped._data = _data;
-      }
-
-      console.log('whatsapp-webhook: payload desencapsulado de "data.message" wrapper', {
-        originalKeys: Object.keys(payload),
-        dataKeys: Object.keys(dataWrapper),
-        unwrappedKeys: Object.keys(unwrapped),
-        hasData: !!unwrapped._data,
-      });
-
-      return unwrapped;
-    }
+  if (message.text?.body) {
+    body = message.text.body;
+  } else if (message.image) {
+    body = '[Imagem]';
+    hasMedia = true;
+  } else if (message.video) {
+    body = '[Vídeo]';
+    hasMedia = true;
+  } else if (message.audio) {
+    body = '[Áudio]';
+    hasMedia = true;
+  } else if (message.voice) {
+    body = '[Mensagem de voz]';
+    hasMedia = true;
+  } else if (message.document) {
+    body = `[Documento${message.document.filename ? ': ' + message.document.filename : ''}]`;
+    hasMedia = true;
+  } else if (message.location) {
+    body = '[Localização]';
+    hasMedia = true;
   }
 
-  if (payload.message && typeof payload.message === 'object') {
-    const messageData = payload.message as Record<string, unknown>;
+  const fromNumber = direction === 'inbound' ? (message.from || chatId) : null;
+  const toNumber = direction === 'outbound' ? chatId : null;
+  const contactName = message.from_name || null;
+  const timestamp = toIsoString(message.timestamp);
 
-    const unwrapped = { ...messageData };
-
-    const _data = normalizeJson(messageData._data);
-    if (Object.keys(_data).length > 0) {
-      unwrapped._data = _data;
-    }
-
-    console.log('whatsapp-webhook: payload desencapsulado de "message" wrapper', {
-      originalKeys: Object.keys(payload),
-      unwrappedKeys: Object.keys(unwrapped),
-      hasData: !!unwrapped._data,
-    });
-
-    return unwrapped;
-  }
-
-  return payload;
-}
-
-function toNumber(value: unknown): number | null {
-  if (typeof value === 'number' && !Number.isNaN(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
-
-function resolveTimestamp(payload: Record<string, unknown>): number | null {
-  const _data = normalizeJson(payload._data);
-
-  const candidates = [
-    payload.timestamp,
-    (payload as any).t,
-    (payload as any).ts,
-    _data.t,
-    _data.timestamp,
-    _data.ts,
-    _data.clientReceivedTsMillis,
-    (payload as any).clientReceivedTsMillis,
-  ];
-
-  for (const candidate of candidates) {
-    const numeric = toNumber(candidate);
-    if (numeric === null) {
-      continue;
-    }
-
-    if (numeric > 1_000_000_000_000) {
-      return Math.floor(numeric / 1000);
-    }
-
-    return numeric;
-  }
-
-  return null;
-}
-
-function resolveChatId(payload: Record<string, unknown>): string | null {
-  const _data = normalizeJson(payload._data);
-  const id = normalizeJson(payload.id);
-
-  const candidates = [
-    payload.chatId,
-    payload.from,
-    _data.from,
-    id.remote,
-    payload.to,
-    _data.to,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return null;
-}
-
-function resolveContactName(payload: Record<string, unknown>): string | null {
-  const sender = normalizeJson(payload.sender);
-  const senderId = normalizeJson(sender.id);
-  const _data = normalizeJson(payload._data);
-
-  const author = typeof payload.author === 'string' ? payload.author : null;
-  const isGroup = typeof payload.from === 'string' && payload.from.endsWith('@g.us');
-
-  const candidates = [
-    payload.notifyName,
-    _data.notifyName,
-    sender.pushname,
-    sender.name,
-    sender.shortName,
-    sender.formattedName,
-    senderId.user,
-    payload.chat && normalizeJson((payload as any).chat).name,
-    isGroup && author ? author : null,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return null;
-}
-
-function normalizeMessagePayload(payload: Record<string, unknown>): NormalizedMessage | null {
-  const messageType = typeof payload.type === 'string' ? payload.type : null;
-
-  const isGroupSystemMessage = messageType === 'gp2' || messageType === 'e2e_notification';
-  if (isGroupSystemMessage) {
-    console.log('whatsapp-webhook: ignorando mensagem de sistema do grupo', {
-      type: messageType,
-      subtype: (payload as any).subtype,
-    });
-    return null;
-  }
-
-  const messageId = (payload?.id as any)?._serialized || (payload?.id as any)?.id;
-  const direction: 'inbound' | 'outbound' = payload?.fromMe ? 'outbound' : 'inbound';
-
-  const fromNumber = typeof payload.from === 'string' ? payload.from : null;
-  const toNumber = typeof payload.to === 'string' ? payload.to : null;
-
-  const chatId = direction === 'outbound' ? toNumber : fromNumber;
-
-  console.log('whatsapp-webhook: normalizando payload de mensagem', {
-    messageId,
-    direction,
-    fromNumber,
-    toNumber,
-    chatId,
-    type: messageType,
-    hasId: !!payload.id,
-    idStructure: payload.id ? Object.keys(payload.id as any) : [],
-    hasData: !!payload._data,
-  });
-
-  if (!messageId || !chatId) {
-    console.error('whatsapp-webhook: mensagem sem messageId ou chatId', {
-      messageId,
-      chatId,
-      direction,
-      fromNumber,
-      toNumber,
-      type: messageType,
-      payloadKeys: Object.keys(payload),
-      idObject: payload.id,
-    });
-    return null;
-  }
-
-  const timestamp = toIsoString(resolveTimestamp(payload));
-  const contactName = resolveContactName(payload);
-  const chatIdLower = chatId.toLowerCase();
-  const isGroup = chatIdLower.endsWith('@g.us') || Boolean((payload as any).isGroup);
-
-  const author = isGroup && typeof payload.author === 'string' ? payload.author : null;
-  const ackStatus = typeof payload.ack === 'number' ? payload.ack : null;
-
-  const normalized = {
+  const normalized: NormalizedMessage = {
     chatId,
     messageId,
     direction,
     fromNumber,
     toNumber,
-    type: typeof payload.type === 'string' ? payload.type : null,
-    body: typeof payload.body === 'string' ? payload.body : null,
-    hasMedia: Boolean(payload.hasMedia),
+    type: message.type,
+    body,
+    hasMedia,
     timestamp,
     contactName,
     isGroup,
-    author,
-    ackStatus,
-    payload: normalizePayload(payload),
+    author: isGroup && fromNumber ? fromNumber : null,
+    ackStatus: null,
+    payload: JSON.parse(JSON.stringify(message)),
   };
 
-  console.log('whatsapp-webhook: mensagem normalizada', {
+  console.log('whatsapp-webhook: mensagem Whapi normalizada', {
     messageId: normalized.messageId,
     chatId: normalized.chatId,
     direction: normalized.direction,
     contactName: normalized.contactName,
     body: normalized.body?.substring(0, 50),
+    type: message.type,
   });
 
   return normalized;
@@ -580,91 +451,51 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const url = new URL(req.url);
-
   if (req.method !== 'POST') {
     return respond({ error: 'Method not allowed' }, { status: 405 });
   }
 
-  let payload: Record<string, unknown> = {};
+  let payload: WhapiWebhook;
 
   try {
-    const contentType = req.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      payload = normalizeJson(await req.json());
-    } else {
-      const text = await req.text();
-      try {
-        payload = normalizeJson(JSON.parse(text));
-      } catch (_err) {
-        payload = { raw: text };
-      }
-    }
+    payload = await req.json();
   } catch (error) {
     console.error('whatsapp-webhook: erro ao ler payload', error);
     return respond({ error: 'Payload inválido' }, { status: 400 });
   }
 
   const headers = extractHeaders(req.headers);
-  const eventName = extractEventName(payload, req.headers, url);
+  const eventName = extractEventName(payload, req.headers);
 
-  console.log('whatsapp-webhook: evento recebido', {
+  console.log('whatsapp-webhook: evento Whapi recebido', {
     eventName,
-    payloadKeys: Object.keys(payload),
-    hasMessage: !!payload.message,
-    url: url.toString(),
+    channelId: payload.channel_id,
+    messagesCount: payload.messages?.length || 0,
+    eventType: payload.event?.type,
+    eventAction: payload.event?.event,
   });
 
   try {
-    await storeEvent({ event: eventName, payload, headers });
+    await storeEvent({ event: eventName, payload: payload as unknown as Record<string, unknown>, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('whatsapp-webhook: erro ao salvar evento', message, { eventName, payload });
-    return respond({ error: message }, { status: 500 });
   }
 
-  const shouldHandleMessage = ['message', 'message_create'].includes(eventName.toLowerCase());
-  const isAckUpdate = eventName.toLowerCase() === 'message_ack';
+  const isMessageEvent = eventName.toLowerCase().includes('messages');
 
-  if (shouldHandleMessage) {
-    const unwrapped = unwrapPayload(payload);
-    const normalized = normalizeMessagePayload(unwrapped);
-
-    if (!normalized) {
-      console.warn('whatsapp-webhook: mensagem ignorada por falta de dados essenciais', { payload, eventName });
-    } else {
+  if (isMessageEvent && payload.messages && Array.isArray(payload.messages)) {
+    for (const message of payload.messages) {
       try {
+        const normalized = normalizeWhapiMessage(message);
         await upsertChat(normalized);
         await upsertMessage(normalized);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Erro desconhecido';
-        console.error('whatsapp-webhook: erro ao salvar mensagem', message, { eventName, payload });
-        return respond({ error: message }, { status: 500 });
+        const message_error = error instanceof Error ? error.message : 'Erro desconhecido';
+        console.error('whatsapp-webhook: erro ao processar mensagem', message_error, { messageId: message.id });
       }
     }
   }
 
-  if (isAckUpdate) {
-    const unwrapped = unwrapPayload(payload);
-    const messageId = (unwrapped?.id as any)?._serialized || (unwrapped?.id as any)?.id;
-    const ackStatus = typeof unwrapped.ack === 'number' ? unwrapped.ack : null;
-
-    if (messageId && ackStatus !== null) {
-      try {
-        await updateMessageAck(messageId, ackStatus);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Erro desconhecido';
-        console.error('whatsapp-webhook: erro ao atualizar ACK', message, { messageId, ackStatus });
-        return respond({ error: message }, { status: 500 });
-      }
-    } else {
-      console.warn('whatsapp-webhook: ack update ignorado por falta de dados', {
-        messageId,
-        ackStatus,
-        payload: unwrapped,
-      });
-    }
-  }
-
-  return respond({ success: true, event: eventName });
+  return respond({ success: true, event: eventName, processed: payload.messages?.length || 0 });
 });
