@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-Whapi-Event',
 };
 
@@ -169,8 +169,17 @@ type WhapiGroupUpdate = {
   changes: string[];
 };
 
+type WhapiMessageUpdate = {
+  id: string;
+  trigger?: WhapiMessage;
+  before_update: WhapiMessage;
+  after_update: WhapiMessage;
+  changes: string[];
+};
+
 type WhapiWebhook = {
   messages?: WhapiMessage[];
+  messages_updates?: WhapiMessageUpdate[];
   statuses?: WhapiStatus[];
   groups?: WhapiGroup[];
   groups_participants?: WhapiGroupParticipants[];
@@ -965,7 +974,7 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'PATCH') {
     return respond({ error: 'Method not allowed' }, { status: 405 });
   }
 
@@ -1004,7 +1013,15 @@ Deno.serve(async (req) => {
     for (const message of payload.messages) {
       try {
         const isDeleted = message.action?.type === 'delete' || message.type === 'revoked';
-        const isEdited = message.action?.type === 'edit' || message.edited_at !== undefined || message.edit_history !== undefined;
+        const isEditAction = message.type === 'action' && message.action?.type === 'edit';
+
+        if (isEditAction) {
+          console.log('whatsapp-webhook: ignorando ação de edição (será processada via messages_updates)', {
+            actionId: message.id,
+            targetId: message.action?.target,
+          });
+          continue;
+        }
 
         if (isDeleted) {
           console.log('whatsapp-webhook: mensagem deletada detectada', {
@@ -1012,17 +1029,6 @@ Deno.serve(async (req) => {
             chatId: message.chat_id,
           });
           await processMessageDelete(message);
-        } else if (isEdited) {
-          console.log('whatsapp-webhook: mensagem editada detectada', {
-            messageId: message.id,
-            chatId: message.chat_id,
-            editedAt: message.edited_at,
-            actionType: message.action?.type,
-          });
-
-          const normalized = normalizeWhapiMessage(message);
-          await upsertChat(normalized);
-          await processMessageEdit(message, normalized);
         } else {
           const normalized = normalizeWhapiMessage(message);
           await upsertChat(normalized);
@@ -1031,6 +1037,24 @@ Deno.serve(async (req) => {
       } catch (error) {
         const message_error = error instanceof Error ? error.message : 'Erro desconhecido';
         console.error('whatsapp-webhook: erro ao processar mensagem', message_error, { messageId: message.id });
+      }
+    }
+  }
+
+  if (payload.messages_updates && Array.isArray(payload.messages_updates)) {
+    for (const update of payload.messages_updates) {
+      try {
+        console.log('whatsapp-webhook: processando atualização de mensagem', {
+          messageId: update.id,
+          changes: update.changes,
+        });
+
+        const normalized = normalizeWhapiMessage(update.after_update);
+        await upsertChat(normalized);
+        await processMessageEdit(update.after_update, normalized);
+      } catch (error) {
+        const update_error = error instanceof Error ? error.message : 'Erro desconhecido';
+        console.error('whatsapp-webhook: erro ao processar atualização de mensagem', update_error, { messageId: update.id });
       }
     }
   }
@@ -1106,6 +1130,7 @@ Deno.serve(async (req) => {
 
   const processed =
     (payload.messages?.length || 0) +
+    (payload.messages_updates?.length || 0) +
     (payload.statuses?.length || 0) +
     (payload.groups?.length || 0) +
     (payload.groups_participants?.length || 0) +
